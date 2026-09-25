@@ -8,7 +8,7 @@ import { Header } from './components/Header';
 import { Dashboard } from './components/Dashboard';
 import { BottomNav } from './components/BottomNav';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { initAuth, testConnection } from './lib/firebaseAuth';
+import { initAuth } from './lib/firebaseAuth';
 import { Sparkles, Bot, MessageSquare } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
@@ -294,7 +294,7 @@ export default function App() {
 
   // Modals
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('themes');
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('all');
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [userModalTab, setUserModalTab] = useState<'profile' | 'roles'>('profile');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -612,7 +612,6 @@ export default function App() {
 
   // Auto-sync authenticated Google user identity with active profile
   useEffect(() => {
-    testConnection();
     const unsubscribe = initAuth((authUser) => {
       if (authUser) {
         const isSysAdmin = authUser.email?.toLowerCase().trim() === SYSTEM_ADMIN_EMAIL.toLowerCase();
@@ -1419,7 +1418,10 @@ export default function App() {
         factoryProfile={factoryProfile}
         onOpenFactorySettings={handleOpenFactorySettings}
         onOpenAndroidPackage={() => setIsAndroidPackageModalOpen(true)}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={() => {
+          setSettingsInitialTab('all');
+          setIsSettingsOpen(true);
+        }}
       />
 
       {/* Main Content Area: Responsive padding with safe-area spacing for mobile bottom navigation */}
@@ -1648,7 +1650,10 @@ export default function App() {
         unreadNotificationsCount={unreadNotificationsCount}
         onOpenNotifications={() => setIsNotificationsOpen(true)}
         onOpenDatabase={() => handleOpenDatabase('backup')}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={() => {
+          setSettingsInitialTab('all');
+          setIsSettingsOpen(true);
+        }}
         onOpenUserModal={handleOpenUserModal}
         onOpenChat={() => setIsChatOpen(true)}
         onOpenAndroidPackage={() => setIsAndroidPackageModalOpen(true)}

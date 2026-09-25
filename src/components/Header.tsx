@@ -6,8 +6,6 @@
 import React from 'react';
 import {
   Bell,
-  Sun,
-  Moon,
   Gauge,
   Award,
   CheckCircle2,
@@ -20,13 +18,11 @@ import {
   MessageSquare,
   Lock,
   Factory,
-  Building2,
-  Settings
+  Building2
 } from 'lucide-react';
 import { SaveStatus, UserProfile, LineEntry, FactoryIndustryProfile } from '../types';
 import { CustomDateSelector } from './CustomDateSelector';
 import { ProductionFloorDropdown } from './ProductionFloorSelector';
-import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
   theme: string;
@@ -86,8 +82,6 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAndroidPackage,
   onOpenSettings
 }) => {
-  const isDark = theme === 'dark';
-
   return (
     <header
       id="app-top-header"
@@ -275,20 +269,6 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Quick Sign In / Auth Button */}
-            {onOpenAuth && (
-              <button
-                id="top-signin-btn"
-                type="button"
-                onClick={onOpenAuth}
-                title="Open Floor Login & SSO Sign-In"
-                className="h-10 sm:h-9 px-2.5 sm:px-3 rounded-xl border border-[#176f78]/30 bg-[#176f78]/10 hover:bg-[#176f78] text-[#176f78] hover:text-white flex items-center gap-1.5 transition-all text-xs font-bold cursor-pointer shadow-2xs touch-manipulation active:scale-95 shrink-0"
-              >
-                <Lock className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden sm:inline font-display uppercase tracking-wide text-[11px]">Sign In</span>
-              </button>
-            )}
-
             {/* Import Data Button - visible on tablet/desktop, accessible via bottom drawer on mobile */}
             {onOpenDatabase && (
               <button
@@ -335,9 +315,6 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Android / PWA Install Button */}
-            <PWAInstallButton onOpenAndroidPackageModal={onOpenAndroidPackage} />
-
             {/* Notifications Button */}
             <button
               id="top-notifications-btn"
@@ -367,35 +344,6 @@ export const Header: React.FC<HeaderProps> = ({
                 <Lock className="w-4 h-4 transition-transform group-hover:scale-110" />
               </button>
             )}
-
-            {/* IE Settings & Control Center Button */}
-            {onOpenSettings && (
-              <button
-                id="header-settings-btn"
-                type="button"
-                onClick={onOpenSettings}
-                title="Settings & IE Control Center (All Modules & Quick Utilities)"
-                aria-label="Settings & Control Center"
-                className="relative w-10 h-10 sm:w-9 sm:h-9 rounded-xl border border-[#d9d2c2] bg-white text-slate-700 hover:text-[#176f78] hover:border-[#176f78] flex items-center justify-center transition-all shadow-2xs cursor-pointer group touch-manipulation active:scale-95 shrink-0"
-              >
-                <Settings className="w-4 h-4 transition-transform group-hover:rotate-45 duration-300" />
-              </button>
-            )}
-
-            {/* Theme Toggle Button (Light/Dark Mode with Smooth Cross-Fade) */}
-            <button
-              id="header-theme-toggle-btn"
-              onClick={onToggleTheme}
-              title={isDark ? 'Switch to Warm Cream (Light Mode)' : 'Switch to Night Shift (Dark Mode)'}
-              aria-label={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-              className="relative w-10 h-10 sm:w-9 sm:h-9 rounded-xl border border-[#d9d2c2] bg-white text-slate-700 hover:text-[#176f78] hover:border-[#176f78] flex items-center justify-center transition-all shadow-2xs cursor-pointer group overflow-hidden touch-manipulation active:scale-95 shrink-0"
-            >
-              {isDark ? (
-                <Sun className="w-4 h-4 text-amber-400 transition-transform group-hover:rotate-90 duration-300" />
-              ) : (
-                <Moon className="w-4 h-4 text-[#176f78] transition-transform group-hover:-rotate-12 duration-300" />
-              )}
-            </button>
           </div>
         </div>
       </div>

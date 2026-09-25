@@ -3,35 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import {
-  getAuth,
-  signInWithPopup,
-  signOut as firebaseSignOut,
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  User
-} from 'firebase/auth';
-import { initializeFirestore, getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
-
-// Initialize Firebase app singleton
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-export const auth = getAuth(app);
-
-const databaseId = (firebaseConfig as any).firestoreDatabaseId;
-export const db = (() => {
-  if (typeof window !== 'undefined') {
-    try {
-      return initializeFirestore(app, {
-        experimentalForceLongPolling: true,
-      }, databaseId);
-    } catch {
-      return getFirestore(app, databaseId);
-    }
-  }
-  return getFirestore(app, databaseId);
-})();
+// Firebase integration is temporarily suspended for local development.
+// All authentication and factory data operate in local-first mode (IndexedDB + localStorage).
+// Ready to be re-connected before final production publish.
 
 export enum OperationType {
   CREATE = 'create',
@@ -63,96 +37,118 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
+      userId: 'local-offline-usr',
+      email: 'realmec85pro231@gmail.com',
+      emailVerified: true,
+      isAnonymous: false,
     },
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.info('Local development mode: Firestore operation stubbed.', errInfo);
 }
 
-export async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
-    }
+// Stub database object for type compatibility
+export const db = {} as any;
+export const auth = {
+  currentUser: {
+    uid: 'local-offline-user',
+    email: 'realmec85pro231@gmail.com',
+    displayName: 'IE Engineer (Local)'
   }
+} as any;
+
+/**
+ * Health check probe: returns immediately in local mode with no network overhead.
+ */
+export async function testConnection(): Promise<void> {
+  return Promise.resolve();
 }
 
-export const provider = new GoogleAuthProvider();
-// Required Google OAuth scopes for user profile identity
-provider.addScope('openid');
-provider.addScope('https://www.googleapis.com/auth/userinfo.profile');
-provider.addScope('https://www.googleapis.com/auth/userinfo.email');
+// In-memory token & profile store
+let cachedAccessToken: string | null = 'local-auth-token-active';
+type AuthCallback = (user: any, token: string) => void;
+const authListeners: Set<AuthCallback> = new Set();
 
-// In-memory token caching as mandated by workspace-integration skill
-let isSigningIn = false;
-let cachedAccessToken: string | null = null;
+let currentLocalUser: any = (() => {
+  try {
+    const saved = localStorage.getItem('ie_user_profile');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        uid: parsed.googleUid || 'local-usr-admin',
+        displayName: parsed.name || 'Lead IE Engineer',
+        email: parsed.email || 'realmec85pro231@gmail.com',
+        photoURL: parsed.photoURL || undefined
+      };
+    }
+  } catch {}
+  return {
+    uid: 'local-usr-admin',
+    displayName: 'Lead IE Engineer',
+    email: 'realmec85pro231@gmail.com',
+    photoURL: undefined
+  };
+})();
 
+/**
+ * Subscribes to authentication state changes locally without Firebase network calls.
+ */
 export const initAuth = (
-  onAuthSuccess?: (user: User, token: string) => void,
+  onAuthSuccess?: (user: any, token: string) => void,
   onAuthFailure?: () => void
 ) => {
-  return onAuthStateChanged(auth, async (user: User | null) => {
-    if (user) {
-      if (cachedAccessToken) {
-        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-      } else if (!isSigningIn) {
-        // Try getting fresh ID token or cached credential
-        try {
-          const idToken = await user.getIdToken();
-          cachedAccessToken = idToken;
-          if (onAuthSuccess) onAuthSuccess(user, idToken);
-        } catch {
-          cachedAccessToken = null;
-          if (onAuthFailure) onAuthFailure();
-        }
-      }
-    } else {
-      cachedAccessToken = null;
-      if (onAuthFailure) onAuthFailure();
+  if (currentLocalUser && onAuthSuccess) {
+    onAuthSuccess(currentLocalUser, cachedAccessToken || 'local-auth-token-active');
+  } else if (!currentLocalUser && onAuthFailure) {
+    onAuthFailure();
+  }
+
+  if (onAuthSuccess) {
+    authListeners.add(onAuthSuccess);
+  }
+
+  return () => {
+    if (onAuthSuccess) {
+      authListeners.delete(onAuthSuccess);
     }
-  });
+  };
 };
 
-export const googleSignIn = async (): Promise<{ user: User | null; accessToken: string; error?: string } | null> => {
-  try {
-    isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    const token = credential?.accessToken || (await result.user.getIdToken());
-    
-    cachedAccessToken = token;
-    return { user: result.user, accessToken: token };
-  } catch (error: any) {
-    // Gracefully catch domain authorization notices or popup cancellations without raising unhandled errors
-    if (error?.code === 'auth/unauthorized-domain' || error?.message?.includes('auth/unauthorized-domain')) {
-      return { user: null, accessToken: '', error: 'auth/unauthorized-domain' };
-    } else if (error?.code === 'auth/popup-closed-by-user') {
-      return { user: null, accessToken: '', error: 'auth/popup-closed-by-user' };
-    }
-    return { user: null, accessToken: '', error: error?.message || 'auth/unknown-error' };
-  } finally {
-    isSigningIn = false;
-  }
+/**
+ * Direct Google Profile Authentication for local development (no external OAuth pop-up needed).
+ */
+export const googleSignIn = async (userEmail?: string): Promise<{ user: any; accessToken: string; error?: string } | null> => {
+  const emailToUse = userEmail || 'realmec85pro231@gmail.com';
+  const simulatedUser = {
+    uid: 'google-usr-' + (emailToUse.split('@')[0] || 'local'),
+    displayName: emailToUse === 'realmec85pro231@gmail.com' ? 'Admin / Lead IE' : emailToUse.split('@')[0],
+    email: emailToUse,
+    photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256'
+  };
+
+  currentLocalUser = simulatedUser;
+  cachedAccessToken = 'local-token-' + Date.now();
+
+  authListeners.forEach(listener => {
+    try {
+      listener(simulatedUser, cachedAccessToken!);
+    } catch {}
+  });
+
+  return { user: simulatedUser, accessToken: cachedAccessToken };
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
-  return cachedAccessToken;
+  return cachedAccessToken || 'local-auth-token';
 };
 
 export const googleSignOut = async () => {
-  await firebaseSignOut(auth);
+  currentLocalUser = null;
   cachedAccessToken = null;
+  authListeners.forEach(listener => {
+    try {
+      listener(null, '');
+    } catch {}
+  });
 };

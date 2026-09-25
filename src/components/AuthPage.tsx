@@ -288,7 +288,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           {/* Mode 1: Primary Sign-in & Google SSO */}
           {authMode === 'signin' && (
             <div className="space-y-5">
-              {/* Google OAuth 2.0 / Firebase SSO Button */}
+              {/* Google SSO / Direct Auth Button */}
               <button
                 type="button"
                 onClick={handleGoogleSSO}

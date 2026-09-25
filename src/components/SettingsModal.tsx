@@ -49,7 +49,6 @@ import {
   ShieldCheck,
   Bell,
   Eye,
-  SlidersHorizontal,
   Flame,
   Zap,
   Gauge,
@@ -57,7 +56,8 @@ import {
   Moon,
   Info,
   SmartphoneNfc,
-  DownloadCloud
+  DownloadCloud,
+  RotateCcw
 } from 'lucide-react';
 import { AndroidLogoIcon } from './AndroidLogoIcon';
 import {
@@ -69,6 +69,7 @@ import {
   UserProfile
 } from '../types';
 import { DEFAULT_DAILY_BACKUP_SETTINGS } from '../utils/indexedDbBackup';
+import { DEFAULT_DASHBOARD_LAYOUT } from '../mockData';
 import { playWipAlertSound, playBottleneckAlertSound } from '../utils/audioAlert';
 
 export type SettingsTab =
@@ -719,9 +720,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       */}
       <div className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl bg-[#f2f2f7] dark:bg-[#000000] sm:rounded-3xl sm:border border-[#d1d1d6] dark:border-[#38383a] shadow-2xl flex flex-col overflow-hidden text-[#1c1c1e] dark:text-[#f2f2f7] transition-all">
         
-        {/* iOS-Style Navigation Bar (Top Sticky App Bar) */}
-        <header className="sticky top-0 z-30 px-4 py-3 bg-[#fbfbfd]/90 dark:bg-[#1c1c1e]/90 backdrop-blur-xl border-b border-[#c6c6c8]/60 dark:border-[#38383a]/60 flex items-center justify-between shrink-0 select-none pt-safe">
-          <div className="flex items-center gap-1.5 min-w-0">
+        {/* iOS / Material Settings Navigation Bar (Top Sticky App Bar - Settings Default Header) */}
+        <header className="sticky top-0 z-30 px-4 sm:px-6 py-3.5 bg-[#fbfbfd]/95 dark:bg-[#1c1c1e]/95 backdrop-blur-xl border-b border-[#c6c6c8]/60 dark:border-[#38383a]/60 flex items-center justify-between shrink-0 select-none pt-safe transition-colors">
+          <div className="flex items-center gap-2.5 min-w-0">
             {activeSubPage !== 'all' ? (
               <button
                 type="button"
@@ -732,16 +733,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <span>Settings</span>
               </button>
             ) : (
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-[8px] bg-gradient-to-br from-[#176f78] to-[#007aff] text-white flex items-center justify-center shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-[10px] bg-gradient-to-br from-[#176f78] via-[#007aff] to-[#5856d6] text-white flex items-center justify-center shadow-xs shrink-0">
                   <Settings className="w-4 h-4" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-bold text-[17px] tracking-tight text-[#000000] dark:text-white leading-tight">
-                    Settings
-                  </span>
-                  <span className="text-[10px] text-[#8e8e93] font-medium leading-none sm:hidden">
-                    IE Control Center
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[18px] tracking-tight text-[#000000] dark:text-white leading-tight">
+                      Settings
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-[#007aff]/15 text-[#007aff] dark:text-blue-400 font-mono">
+                      DEFAULT
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-[#8e8e93] font-medium leading-none">
+                    IE Control Center &amp; Preferences
                   </span>
                 </div>
               </div>
@@ -785,10 +791,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Search settings, modules, tools..."
+              placeholder="Search settings..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full bg-[#e3e3e8] dark:bg-[#1c1c1e] text-[#1c1c1e] dark:text-white text-[14px] rounded-xl pl-9 pr-8 py-2 placeholder-[#8e8e93] border-0 focus:ring-2 focus:ring-[#007aff] transition-all touch-manipulation"
+              className="w-full bg-[#e3e3e8] dark:bg-[#1c1c1e] text-[#1c1c1e] dark:text-white text-[14px] rounded-xl pl-9 pr-8 py-2.5 placeholder-[#8e8e93] border-0 focus:ring-2 focus:ring-[#007aff] transition-all touch-manipulation shadow-2xs"
             />
             {searchQuery && (
               <button
@@ -801,47 +807,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             )}
           </div>
         </div>
-
-        {/* Quick Category Segmented Filter Strip (Horizontal Touch Carousel) */}
-        {!searchQuery && (
-          <div className="px-4 py-2 bg-[#f2f2f7] dark:bg-[#000000] border-b border-[#e5e5ea]/60 dark:border-[#2c2c2e]/60 shrink-0 overflow-x-auto no-scrollbar">
-            <div className="inline-flex items-center gap-1.5 py-0.5">
-              {[
-                { id: 'all', label: 'All', icon: SlidersHorizontal },
-                { id: 'modules', label: 'Workspaces', count: ieNavigationModules.length, icon: LayoutGrid },
-                { id: 'utilities', label: 'Utilities', count: quickUtilities.length, icon: Zap },
-                { id: 'themes', label: 'Themes', icon: Palette },
-                { id: 'alerts', label: 'Sounds', icon: BellRing },
-                { id: 'layout', label: 'Widgets', icon: Layout },
-                { id: 'backup', label: 'Backup', icon: HardDrive },
-                { id: 'updates', label: 'Updates', icon: DownloadCloud }
-              ].map(tab => {
-                const Icon = tab.icon;
-                const isActive = activeSubPage === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveSubPage(tab.id as SettingsTab)}
-                    className={`px-3 py-1.5 rounded-full text-[12px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap touch-manipulation ${
-                      isActive
-                        ? 'bg-[#007aff] text-white shadow-xs font-bold'
-                        : 'bg-[#e3e3e8] dark:bg-[#1c1c1e] text-[#6e6e73] dark:text-[#a1a1a6] hover:bg-[#d8d8dd] dark:hover:bg-[#2c2c2e]'
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span>{tab.label}</span>
-                    {typeof tab.count === 'number' && (
-                      <span className={`text-[10px] px-1 py-0.2 rounded-full font-mono ${isActive ? 'bg-white/25 text-white' : 'bg-black/5 dark:bg-white/10'}`}>
-                        {tab.count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {/* Toast Notification Banner */}
         {backupToast && (
@@ -859,8 +824,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         )}
 
-        {/* Scrollable Settings Body - Inset Grouped Table Layout */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-5 space-y-5 pb-safe">
+        {/* Scrollable Settings Body - Inset Grouped Table Layout (Settings Default Page) */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3.5 sm:p-5 space-y-5 pb-safe scrollbar-thin">
           
           {/* SEARCH RESULTS VIEW */}
           {searchQuery.trim().length > 0 && (
@@ -1428,6 +1393,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </span>
                       <ChevronRight className="w-4 h-4 text-[#c7c7cc]" />
                     </div>
+                  </div>
+
+                  {/* Reset Settings to Factory Defaults */}
+                  <div
+                    onClick={() => {
+                      if (onSelectTheme) onSelectTheme('light');
+                      if (onToggleAuditoryAlerts) onToggleAuditoryAlerts(true);
+                      if (onUpdateLayout) onUpdateLayout(DEFAULT_DASHBOARD_LAYOUT);
+                      setBackupToast('Settings restored to factory defaults (Theme, Layout, Alerts)');
+                      setTimeout(() => setBackupToast(null), 3500);
+                    }}
+                    className="px-4 py-3 flex items-center justify-between hover:bg-rose-500/5 active:bg-rose-500/10 transition-colors cursor-pointer touch-manipulation min-h-[50px] text-rose-600 dark:text-rose-400"
+                  >
+                    <div className="flex items-center gap-3">
+                      <SquircleIcon bgColor="bg-rose-500">
+                        <RotateCcw className="w-4 h-4 text-white" />
+                      </SquircleIcon>
+                      <div>
+                        <div className="text-[16px] font-medium leading-tight text-rose-600 dark:text-rose-400">
+                          Reset Settings to Defaults
+                        </div>
+                        <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                          Restores default theme, widget layout &amp; alert tones
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-[#c7c7cc]" />
                   </div>
                 </div>
               </div>

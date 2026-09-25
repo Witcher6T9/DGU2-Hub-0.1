@@ -1,0 +1,8 @@
+{
+  "name": "DGU-2 IE Daily Control System",
+  "description": "Industrial Engineering Daily Control System (DCS) for Line DGU-2: real-time OEE, hourly production pacing, loss Pareto analysis, line balancing, and daily tier action management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

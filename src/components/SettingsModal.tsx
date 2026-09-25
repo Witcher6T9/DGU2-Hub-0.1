@@ -1,0 +1,2005 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  X,
+  Settings,
+  Layout,
+  Palette,
+  Check,
+  Volume2,
+  VolumeX,
+  BellRing,
+  Play,
+  Shield,
+  Factory,
+  CheckCircle2,
+  Layers,
+  ArrowRight,
+  HardDrive,
+  Clock,
+  Calendar,
+  Sparkles,
+  ChevronRight,
+  ChevronLeft,
+  RefreshCw,
+  Sliders,
+  Code2,
+  Copy,
+  Terminal,
+  Database,
+  Smartphone,
+  CheckSquare,
+  Activity,
+  LayoutGrid,
+  Wrench,
+  FileSpreadsheet,
+  TrendingUp,
+  Network,
+  Upload,
+  MessageSquare,
+  Award,
+  Lock,
+  User,
+  Search,
+  ExternalLink,
+  ShieldCheck,
+  Bell,
+  Eye,
+  SlidersHorizontal,
+  Flame,
+  Zap,
+  Gauge,
+  Sun,
+  Moon,
+  Info,
+  SmartphoneNfc
+} from 'lucide-react';
+import { AndroidLogoIcon } from './AndroidLogoIcon';
+import {
+  ThemeType,
+  DashboardLayout,
+  FactoryIndustryProfile,
+  UserDailyBackupSettings,
+  DailyBackupRecord,
+  UserProfile
+} from '../types';
+import { DEFAULT_DAILY_BACKUP_SETTINGS } from '../utils/indexedDbBackup';
+import { playWipAlertSound, playBottleneckAlertSound } from '../utils/audioAlert';
+
+export type SettingsTab =
+  | 'all'
+  | 'modules'
+  | 'utilities'
+  | 'backup'
+  | 'themes'
+  | 'alerts'
+  | 'layout'
+  | 'uikit';
+
+export type ComponentPresentationStyle = 'swiftui' | 'uikit' | 'developer-spec';
+
+interface SettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  currentTheme: ThemeType;
+  onSelectTheme: (theme: ThemeType) => void;
+  layout: DashboardLayout;
+  onUpdateLayout: (layout: DashboardLayout) => void;
+  auditoryAlertsEnabled?: boolean;
+  onToggleAuditoryAlerts?: (enabled: boolean) => void;
+  onOpenPrivacySecurity?: () => void;
+  initialTab?: SettingsTab;
+  currentTab?: string;
+  onNavigate?: (tab: string, lineNo?: string) => void;
+  factoryProfile?: FactoryIndustryProfile;
+  onUpdateFactoryProfile?: (updated: FactoryIndustryProfile) => void;
+  savedFactories?: FactoryIndustryProfile[];
+  onSaveFactoryList?: (list: FactoryIndustryProfile[]) => void;
+  dailyBackupSettings?: UserDailyBackupSettings;
+  onUpdateDailyBackupSettings?: (updated: UserDailyBackupSettings) => void;
+  onTriggerManualBackup?: () => Promise<DailyBackupRecord>;
+  onOpenDatabaseModal?: (tab?: 'backup' | 'csv-import') => void;
+  // Quick Utilities Handlers
+  checklistProgress?: number;
+  pendingTodosCount?: number;
+  unreadNotificationsCount?: number;
+  scorecardScore?: number;
+  linesCount?: number;
+  profile?: UserProfile;
+  onOpenNotifications?: () => void;
+  onOpenChat?: () => void;
+  onOpenScorecard?: () => void;
+  onOpenUserModal?: (tab?: 'profile' | 'roles') => void;
+  onOpenAuth?: () => void;
+  onLockTerminal?: () => void;
+  onOpenAndroidPackage?: () => void;
+  onOpenDatabase?: (tab?: 'backup' | 'csv-import') => void;
+  onOpenFactorySettings?: () => void;
+}
+
+/**
+ * Authentic iOS Cupertino Switch (UISwitch / SwiftUI Toggle)
+ * 51px x 31px with 27px thumb and smooth native transition
+ */
+const CupertinoSwitch: React.FC<{
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  ariaLabel?: string;
+}> = ({ checked, onChange, disabled, ariaLabel }) => {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-label={ariaLabel || 'Toggle switch'}
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!disabled) onChange(!checked);
+      }}
+      className={`relative inline-flex h-[31px] w-[51px] shrink-0 cursor-pointer rounded-full p-[2px] transition-colors duration-200 ease-in-out focus:outline-hidden touch-manipulation ${
+        checked ? 'bg-[#34c759]' : 'bg-[#e9e9ea] dark:bg-[#39393d]'
+      } ${disabled ? 'opacity-40 cursor-not-allowed' : 'active:scale-95'}`}
+    >
+      <span
+        className={`pointer-events-none inline-block h-[27px] w-[27px] rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.18),0_1px_1px_rgba(0,0,0,0.06)] ring-0 transition-transform duration-200 ease-in-out ${
+          checked ? 'translate-x-[20px]' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  );
+};
+
+/**
+ * iOS SF Symbol Style Squircle Icon with subtle depth
+ */
+const SquircleIcon: React.FC<{
+  bgColor: string;
+  children: React.ReactNode;
+  size?: 'sm' | 'md' | 'lg';
+}> = ({ bgColor, children, size = 'md' }) => {
+  const sizeClasses = {
+    sm: 'w-7 h-7 rounded-[7px]',
+    md: 'w-8 h-8 rounded-[8px]',
+    lg: 'w-10 h-10 rounded-[10px]'
+  };
+
+  return (
+    <div
+      className={`${sizeClasses[size]} ${bgColor} text-white flex items-center justify-center shrink-0 shadow-2xs`}
+    >
+      {children}
+    </div>
+  );
+};
+
+export const SettingsModal: React.FC<SettingsModalProps> = ({
+  isOpen,
+  onClose,
+  currentTheme,
+  onSelectTheme,
+  layout,
+  onUpdateLayout,
+  auditoryAlertsEnabled = false,
+  onToggleAuditoryAlerts,
+  onOpenPrivacySecurity,
+  initialTab = 'all',
+  currentTab = 'dashboard',
+  onNavigate,
+  factoryProfile,
+  dailyBackupSettings = DEFAULT_DAILY_BACKUP_SETTINGS,
+  onUpdateDailyBackupSettings,
+  onTriggerManualBackup,
+  onOpenDatabaseModal,
+  checklistProgress = 0,
+  pendingTodosCount = 0,
+  unreadNotificationsCount = 0,
+  scorecardScore,
+  linesCount = 34,
+  profile,
+  onOpenNotifications,
+  onOpenChat,
+  onOpenScorecard,
+  onOpenUserModal,
+  onOpenAuth,
+  onLockTerminal,
+  onOpenAndroidPackage,
+  onOpenDatabase,
+  onOpenFactorySettings
+}) => {
+  // Navigation stack state: 'root' (all settings list) or a sub-page id
+  const [activeSubPage, setActiveSubPage] = useState<SettingsTab>(initialTab === 'modules' ? 'modules' : (initialTab || 'all'));
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [playingTestSound, setPlayingTestSound] = useState<'wip' | 'bottleneck' | null>(null);
+  const [isTriggeringBackup, setIsTriggeringBackup] = useState<boolean>(false);
+  const [backupToast, setBackupToast] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState<boolean>(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync initial tab when opened
+  useEffect(() => {
+    if (isOpen) {
+      setActiveSubPage(initialTab || 'all');
+      setSearchQuery('');
+    }
+  }, [isOpen, initialTab]);
+
+  if (!isOpen) return null;
+
+  const handleTestSound = (type: 'wip' | 'bottleneck') => {
+    setPlayingTestSound(type);
+    if (type === 'wip') {
+      playWipAlertSound(true);
+    } else {
+      playBottleneckAlertSound(true);
+    }
+    setTimeout(() => {
+      setPlayingTestSound(null);
+    }, 700);
+  };
+
+  const handleToggleAudio = () => {
+    if (onToggleAuditoryAlerts) {
+      const nextState = !auditoryAlertsEnabled;
+      onToggleAuditoryAlerts(nextState);
+      if (nextState) {
+        playWipAlertSound(true);
+      }
+    }
+  };
+
+  const handleUpdateBackup = (partial: Partial<UserDailyBackupSettings>) => {
+    if (onUpdateDailyBackupSettings) {
+      onUpdateDailyBackupSettings({
+        ...dailyBackupSettings,
+        ...partial
+      });
+    }
+  };
+
+  const handleManualBackupClick = async () => {
+    if (!onTriggerManualBackup) return;
+    setIsTriggeringBackup(true);
+    setBackupToast(null);
+    try {
+      const record = await onTriggerManualBackup();
+      setBackupToast(`Snapshot saved to IndexedDB! (${record.stats.sizeFormatted})`);
+      setTimeout(() => setBackupToast(null), 3000);
+    } catch (err: any) {
+      setBackupToast(`Backup failed: ${err?.message || 'Storage error'}`);
+      setTimeout(() => setBackupToast(null), 3000);
+    } finally {
+      setIsTriggeringBackup(false);
+    }
+  };
+
+  const handleModuleLaunch = (tabId: string) => {
+    if (onNavigate) {
+      onNavigate(tabId);
+    }
+    onClose();
+  };
+
+  // 1. ALL IE NAVIGATION MODULES
+  const ieNavigationModules = [
+    {
+      id: 'dashboard',
+      title: 'Production Dashboard',
+      subtitle: 'Real-time Line Overview, OEE & Attainment Strip',
+      category: 'Floor Operations',
+      icon: Activity,
+      color: 'bg-[#176f78]',
+      badge: 'Active Hub',
+      badgeColor: 'text-[#176f78] dark:text-teal-400 font-bold',
+      description: 'Command center for real-time plant KPIs, hourly output, WIP buffers, and frontline status.'
+    },
+    {
+      id: 'linedata',
+      title: 'Workstation & Line Balancing',
+      subtitle: '34 Sewing Lines, Cycle Times & DHU Defect Rates',
+      category: 'Floor Operations',
+      icon: Layers,
+      color: 'bg-[#007aff]',
+      badge: `${linesCount} Lines`,
+      badgeColor: 'text-[#007aff] dark:text-blue-400 font-bold',
+      description: 'Granular workstation-by-workstation cycle time tracking, Yamazumi charts, and bottleneck alarms.'
+    },
+    {
+      id: 'floor-plan',
+      title: 'Visual Floor Plan & Line Setup',
+      subtitle: 'Spatial Layout, Machine Types & Team Layouts',
+      category: 'Floor Operations',
+      icon: LayoutGrid,
+      color: 'bg-[#5856d6]',
+      badge: 'Spatial Map',
+      badgeColor: 'text-[#5856d6] dark:text-indigo-400 font-bold',
+      description: 'Interactive graphical representation of sewing floors, machine assignments, and operator stations.'
+    },
+    {
+      id: 'simulator',
+      title: 'IE Line Setup & Flow Simulator',
+      subtitle: 'Takt Time, SMV Balancing & Manpower Tuning',
+      category: 'Engineering & Setup',
+      icon: Sliders,
+      color: 'bg-[#ff9500]',
+      badge: 'Pro Flow',
+      badgeColor: 'text-[#ff9500] dark:text-amber-400 font-bold',
+      description: 'Simulate line balancing scenarios, calculate operator requirements, and tune SMV targets.'
+    },
+    {
+      id: 'checklist',
+      title: 'IE Daily Activity Tracking',
+      subtitle: 'Morning Huddle, Hourly Pacing & Shift Audits',
+      category: 'Daily Frontline',
+      icon: CheckSquare,
+      color: 'bg-[#34c759]',
+      badge: `${checklistProgress}% Done`,
+      badgeColor: 'text-[#34c759] dark:text-emerald-400 font-bold',
+      description: '12-point daily industrial engineering verification checklist with audit compliance logs.'
+    },
+    {
+      id: 'todo-schedule',
+      title: 'Floor Tasks & Shift Timeline',
+      subtitle: 'Line Action Items, 5-Whys & Floor Priorities',
+      category: 'Daily Frontline',
+      icon: Clock,
+      color: 'bg-[#ff2d55]',
+      badge: `${pendingTodosCount} Open`,
+      badgeColor: 'text-[#ff2d55] dark:text-rose-400 font-bold',
+      description: 'Frontline action item tracker, 5-Whys root cause resolution, and shift time-blocking calendar.'
+    },
+    {
+      id: 'lean-toolkit',
+      title: 'Lean 13 Methods & Kaizens',
+      subtitle: '5S Audits, SMED Changeover, 7 Wastes & Poka-Yoke',
+      category: 'Lean & Quality',
+      icon: Wrench,
+      color: 'bg-[#af52de]',
+      badge: '13 Methods',
+      badgeColor: 'text-[#af52de] dark:text-purple-400 font-bold',
+      description: 'Interactive Kaizen workshops, 5S scorecards, SMED quick changeover timers, and waste analysis.'
+    },
+    {
+      id: 'monthly',
+      title: 'Monthly Efficiency Analytics',
+      subtitle: 'Plant Attainment, Efficiency Trends & Month-to-Date',
+      category: 'Analytics & Reporting',
+      icon: Calendar,
+      color: 'bg-[#30b0c7]',
+      badge: 'MTD Trends',
+      badgeColor: 'text-[#30b0c7] dark:text-cyan-400 font-bold',
+      description: 'Long-term statistical efficiency modeling, operator curve progression, and historical comparisons.'
+    },
+    {
+      id: 'reports',
+      title: 'Shift Audit Reports & CSV',
+      subtitle: 'Executive Daily Summary, PDF & Excel Exports',
+      category: 'Analytics & Reporting',
+      icon: FileSpreadsheet,
+      color: 'bg-[#107c41]',
+      badge: 'Export Hub',
+      badgeColor: 'text-[#107c41] dark:text-emerald-400 font-bold',
+      description: 'Instant generation of daily floor summaries, printable PDF reports, and structured CSV spreadsheets.'
+    },
+    {
+      id: 'line-history',
+      title: 'Line Production History & Charts',
+      subtitle: 'Trendlines, Day-over-Day Attainment & Curves',
+      category: 'Analytics & Reporting',
+      icon: TrendingUp,
+      color: 'bg-[#007aff]',
+      badge: 'Charts',
+      badgeColor: 'text-[#007aff] dark:text-blue-400 font-bold',
+      description: 'Historical line-by-line performance trajectories, output pacing, and DHU quality trends.'
+    },
+    {
+      id: 'roles',
+      title: 'Debonair Unit-02 IE Org & Roles',
+      subtitle: '4-Tier Hierarchy, Line Assignments & Permissions',
+      category: 'Governance & RBAC',
+      icon: Network,
+      color: 'bg-[#1e3a8a]',
+      badge: 'RBAC 4 Tiers',
+      badgeColor: 'text-[#1e3a8a] dark:text-indigo-400 font-bold',
+      description: 'Frontline organogram mapping Sr. Managers, Wing Managers, Incharges, and Line Engineers.'
+    }
+  ];
+
+  // 2. ALL FRONTLINE QUICK UTILITIES
+  const quickUtilities = [
+    {
+      id: 'util-import-csv',
+      title: 'Import Line Data (CSV / Excel)',
+      subtitle: 'Bulk upload 34 lines, SMV targets and styles',
+      category: 'Data Management',
+      icon: Upload,
+      color: 'bg-[#107c41]',
+      actionLabel: 'Import',
+      onClick: () => {
+        onClose();
+        if (onOpenDatabase) onOpenDatabase('csv-import');
+        else if (onOpenDatabaseModal) onOpenDatabaseModal('csv-import');
+      }
+    },
+    {
+      id: 'util-backup-db',
+      title: 'Automated Daily Backup (IndexedDB)',
+      subtitle: 'Configure daily snapshot schedule & local flash restore',
+      category: 'Data Management',
+      icon: HardDrive,
+      color: 'bg-[#ff9500]',
+      actionLabel: 'Manage',
+      badge: dailyBackupSettings.autoDailyBackupEnabled ? 'Active' : 'Off',
+      onClick: () => {
+        setActiveSubPage('backup');
+      }
+    },
+    {
+      id: 'util-floor-chat',
+      title: 'Floor Comms & IE AI Advisor',
+      subtitle: 'Shop floor WhatsApp-style chat and AI guidance',
+      category: 'Frontline Operations',
+      icon: MessageSquare,
+      color: 'bg-[#008069]',
+      actionLabel: 'Open Comms',
+      badge: 'Live Advisor',
+      onClick: () => {
+        onClose();
+        if (onOpenChat) onOpenChat();
+      }
+    },
+    {
+      id: 'util-scorecard',
+      title: 'IE Performance Scorecard',
+      subtitle: 'Daily operational effectiveness KPI calculation',
+      category: 'Governance & Quality',
+      icon: Award,
+      color: 'bg-[#176f78]',
+      actionLabel: 'View',
+      badge: typeof scorecardScore === 'number' ? `${scorecardScore}%` : undefined,
+      onClick: () => {
+        onClose();
+        if (onOpenScorecard) onOpenScorecard();
+      }
+    },
+    {
+      id: 'util-rbac-roles',
+      title: 'RBAC Roles, Tiers & Organogram',
+      subtitle: 'Configure hierarchy, wing managers & permissions',
+      category: 'Governance & Quality',
+      icon: ShieldCheck,
+      color: 'bg-[#1e3a8a]',
+      actionLabel: 'Manage',
+      onClick: () => {
+        onClose();
+        if (onOpenUserModal) onOpenUserModal('roles');
+      }
+    },
+    {
+      id: 'util-user-profile',
+      title: 'Operator & Engineering Profile',
+      subtitle: profile?.name ? `${profile.name} (${profile.jobTitle})` : 'View profile details & credentials',
+      category: 'Governance & Quality',
+      icon: User,
+      color: 'bg-[#007aff]',
+      actionLabel: 'Edit',
+      onClick: () => {
+        onClose();
+        if (onOpenUserModal) onOpenUserModal('profile');
+      }
+    },
+    {
+      id: 'util-sign-in',
+      title: 'Frontline Sign-In & SSO Session',
+      subtitle: 'Authenticate or switch operator station session',
+      category: 'Security & Access',
+      icon: Lock,
+      color: 'bg-[#34c759]',
+      actionLabel: 'Login',
+      onClick: () => {
+        onClose();
+        if (onOpenAuth) onOpenAuth();
+      }
+    },
+    {
+      id: 'util-lock-terminal',
+      title: 'Lock Workstation Terminal',
+      subtitle: 'PIN-secured terminal lock for shop floor stations',
+      category: 'Security & Access',
+      icon: Shield,
+      color: 'bg-[#ff3b30]',
+      actionLabel: 'Lock',
+      onClick: () => {
+        onClose();
+        if (onLockTerminal) onLockTerminal();
+      }
+    },
+    {
+      id: 'util-android-package',
+      title: 'Android App & APK Packager',
+      subtitle: 'Install PWA or download APK (com.debonair.iedailycontrol)',
+      category: 'Mobile & Terminal',
+      icon: Smartphone,
+      color: 'bg-[#107c41]',
+      actionLabel: 'Package',
+      badge: 'v2.4.0',
+      onClick: () => {
+        onClose();
+        if (onOpenAndroidPackage) onOpenAndroidPackage();
+      }
+    },
+    {
+      id: 'util-alerts-notifications',
+      title: 'Production Alerts & Notifications',
+      subtitle: 'Floor notifications, WIP threshold warnings, and sync logs',
+      category: 'Frontline Operations',
+      icon: Bell,
+      color: 'bg-[#ff2d55]',
+      actionLabel: 'Alerts',
+      badge: unreadNotificationsCount > 0 ? `${unreadNotificationsCount} New` : undefined,
+      onClick: () => {
+        onClose();
+        if (onOpenNotifications) onOpenNotifications();
+      }
+    },
+    {
+      id: 'util-factory-profile',
+      title: 'Plant & Industry Enterprise Setup',
+      subtitle: `${factoryProfile?.name || 'Debonair LTD'} • ${factoryProfile?.unitName || 'Unit-02'} (${factoryProfile?.industrySector || 'Garments'})`,
+      category: 'Data Management',
+      icon: Factory,
+      color: 'bg-[#176f78]',
+      actionLabel: 'Setup',
+      onClick: () => {
+        onClose();
+        if (onOpenFactorySettings) onOpenFactorySettings();
+      }
+    }
+  ];
+
+  // Search filtering
+  const filteredModules = useMemo(() => {
+    if (!searchQuery.trim()) return ieNavigationModules;
+    const q = searchQuery.toLowerCase();
+    return ieNavigationModules.filter(
+      m =>
+        m.title.toLowerCase().includes(q) ||
+        m.subtitle.toLowerCase().includes(q) ||
+        m.category.toLowerCase().includes(q) ||
+        m.description.toLowerCase().includes(q)
+    );
+  }, [searchQuery, ieNavigationModules]);
+
+  const filteredUtilities = useMemo(() => {
+    if (!searchQuery.trim()) return quickUtilities;
+    const q = searchQuery.toLowerCase();
+    return quickUtilities.filter(
+      u =>
+        u.title.toLowerCase().includes(q) ||
+        u.subtitle.toLowerCase().includes(q) ||
+        u.category.toLowerCase().includes(q)
+    );
+  }, [searchQuery, quickUtilities]);
+
+  const themes: { id: ThemeType; label: string; desc: string; previewClass: string; colorDot: string }[] = [
+    {
+      id: 'light',
+      label: 'Warm Cream (Standard)',
+      desc: 'Eye-comfortable neutral canvas for long shifts',
+      previewClass: 'bg-[#f5f3ec] border-[#176f78] text-[#17343a]',
+      colorDot: 'bg-[#f5f3ec] border-[#176f78]'
+    },
+    {
+      id: 'dark',
+      label: 'Night Shift Darkroom',
+      desc: 'Low-glare high contrast slate theme for dim monitoring rooms',
+      previewClass: 'bg-[#182026] border-teal-500 text-slate-100',
+      colorDot: 'bg-[#182026] border-teal-500'
+    },
+    {
+      id: 'forest',
+      label: 'Lean Emerald Kaizen',
+      desc: 'Crisp green hues highlighting continuous improvement and zero defects',
+      previewClass: 'bg-[#f0f7f3] border-emerald-700 text-emerald-950',
+      colorDot: 'bg-[#107c41] border-emerald-700'
+    },
+    {
+      id: 'sunset',
+      label: 'Amber Production Floor',
+      desc: 'Warm amber tones for high-density line management',
+      previewClass: 'bg-[#fffaf2] border-amber-600 text-amber-950',
+      colorDot: 'bg-[#ff9500] border-amber-600'
+    },
+    {
+      id: 'industrial',
+      label: 'Industrial Steel & Monolith',
+      desc: 'Technical steel and graphite theme inspired by modern machinery',
+      previewClass: 'bg-[#eef2f5] border-slate-700 text-slate-900',
+      colorDot: 'bg-[#475569] border-slate-700'
+    }
+  ];
+
+  const currentThemeLabel = useMemo(() => {
+    return themes.find(t => t.id === currentTheme)?.label || 'Warm Cream';
+  }, [currentTheme]);
+
+  const layoutToggles: { key: keyof DashboardLayout; label: string; desc: string }[] = [
+    {
+      key: 'showHero',
+      label: 'Executive Overview Header Card',
+      desc: 'Top summary banner with live date and real-time operational status badge'
+    },
+    {
+      key: 'showStats',
+      label: 'KPI Metrics & Attainment Strip',
+      desc: '6 core factory indicators: Factory Eff %, Target vs Achieved, WIP buffer, Attendance'
+    },
+    {
+      key: 'showQuickActions',
+      label: 'Frontline Quick Actions Bar',
+      desc: 'Fast shortcuts for checklist logging, daily report downloads, and team setup'
+    },
+    {
+      key: 'showAbsents',
+      label: 'Operator & Helper Absenteeism',
+      desc: 'Floor-by-floor manpower attendance rates with shortage impact analysis'
+    },
+    {
+      key: 'showBalancingGraph',
+      label: 'Balancing Loss & Bottleneck Alerts',
+      desc: 'Real-time bottleneck warnings, cycle time deviations, and balancing status'
+    },
+    {
+      key: 'showIO',
+      label: 'Input / Output (I/O) Production Flow',
+      desc: 'Hourly pacing tracking input vs output pieces with WIP threshold monitoring'
+    },
+    {
+      key: 'showUpcoming',
+      label: 'Upcoming Style Transitions',
+      desc: 'Notice board for next scheduled style inputs and sample readiness'
+    },
+    {
+      key: 'showQuickReports',
+      label: 'Quick Reports & Executive Rollup',
+      desc: '3-pillar rollup of plant efficiency, WIP count, and manpower across lines'
+    }
+  ];
+
+  const handleToggleLayout = (key: keyof DashboardLayout) => {
+    onUpdateLayout({
+      ...layout,
+      [key]: !layout[key]
+    });
+  };
+
+  const swiftUiCodeSnippet = `//
+//  MobileSettingsControlCenter.swift
+//  DGU2 IE Daily Control System
+//
+//  SwiftUI Native Inset Grouped Navigation & Control Center
+//
+
+import SwiftUI
+
+struct MobileSettingsView: View {
+    @AppStorage("auditoryAlerts") private var auditoryAlerts: Bool = true
+    @AppStorage("autoDailyBackup") private var autoBackup: Bool = true
+    @AppStorage("backupTime") private var backupTime: String = "18:00"
+    @AppStorage("retentionDays") private var retentionDays: Int = 30
+    @AppStorage("currentTheme") private var currentTheme: String = "light"
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                // Section: Operator Profile
+                Section {
+                    NavigationLink(destination: ProfileDetailView()) {
+                        HStack(spacing: 14) {
+                            Image(systemName: "person.crop.circle.fill")
+                                .resizable()
+                                .frame(width: 52, height: 52)
+                                .foregroundColor(.accentColor)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Debonair IE Admin").font(.headline)
+                                Text("Level 4 • System Admin").font(.subheadline).foregroundColor(.secondary)
+                                Text("realmec85pro231@gmail.com").font(.caption).foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+                
+                // Section: Quick Control Center Tiles
+                Section(header: Text("CONTROL CENTER")) {
+                    Toggle("Auditory Warning Chimes", isOn: $auditoryAlerts)
+                    Toggle("Automated Daily Backup", isOn: $autoBackup)
+                }
+                
+                // Section: IE Navigation Modules
+                Section(header: Text("IE WORKSPACES")) {
+                    NavigationLink("Production Dashboard", destination: DashboardView())
+                    NavigationLink("Workstation & Line Balancing", destination: LineBalancingView())
+                    NavigationLink("Visual Floor Plan & Line Setup", destination: FloorPlanView())
+                    NavigationLink("IE Flow Simulator", destination: SimulatorView())
+                    NavigationLink("Daily Activity Tracking", destination: ChecklistView())
+                }
+                
+                // Section: Preferences
+                Section(header: Text("PREFERENCES")) {
+                    NavigationLink(destination: ThemePickerView()) {
+                        HStack {
+                            Text("Theme")
+                            Spacer()
+                            Text(currentTheme.capitalized).foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("Settings")
+        }
+    }
+}`;
+
+  // Get active subpage title for top bar navigation
+  const getSubPageTitle = (subPage: SettingsTab) => {
+    switch (subPage) {
+      case 'modules':
+        return 'IE Workspaces';
+      case 'utilities':
+        return 'Quick Utilities';
+      case 'backup':
+        return 'Daily Backup';
+      case 'themes':
+        return 'Themes';
+      case 'alerts':
+        return 'Sound & Alerts';
+      case 'layout':
+        return 'Widgets Layout';
+      case 'uikit':
+        return 'Swift Spec';
+      default:
+        return 'Settings';
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col sm:items-center sm:justify-center bg-black/65 backdrop-blur-xs animate-fadeIn overflow-hidden">
+      {/* 
+        Native Mobile Settings Container:
+        - Full-screen on mobile (< 640px) with safe area insets (edge-to-edge iOS Settings feel)
+        - Inset modal window on tablet/desktop (>= 640px) with rounded corners & shadow
+      */}
+      <div className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl bg-[#f2f2f7] dark:bg-[#000000] sm:rounded-3xl sm:border border-[#d1d1d6] dark:border-[#38383a] shadow-2xl flex flex-col overflow-hidden text-[#1c1c1e] dark:text-[#f2f2f7] transition-all">
+        
+        {/* iOS-Style Navigation Bar (Top Sticky App Bar) */}
+        <header className="sticky top-0 z-30 px-4 py-3 bg-[#fbfbfd]/90 dark:bg-[#1c1c1e]/90 backdrop-blur-xl border-b border-[#c6c6c8]/60 dark:border-[#38383a]/60 flex items-center justify-between shrink-0 select-none pt-safe">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {activeSubPage !== 'all' ? (
+              <button
+                type="button"
+                onClick={() => setActiveSubPage('all')}
+                className="flex items-center gap-1 text-[#007aff] hover:opacity-80 active:opacity-60 transition-opacity cursor-pointer font-medium text-[16px] py-1 -ml-1 touch-manipulation"
+              >
+                <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
+                <span>Settings</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-[8px] bg-gradient-to-br from-[#176f78] to-[#007aff] text-white flex items-center justify-center shadow-xs">
+                  <Settings className="w-4 h-4" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-bold text-[17px] tracking-tight text-[#000000] dark:text-white leading-tight">
+                    Settings
+                  </span>
+                  <span className="text-[10px] text-[#8e8e93] font-medium leading-none sm:hidden">
+                    IE Control Center
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Center Title (shown when drilled into a sub-page on mobile) */}
+          {activeSubPage !== 'all' && (
+            <div className="absolute inset-x-24 text-center pointer-events-none">
+              <span className="font-semibold text-[16px] text-[#000000] dark:text-white truncate block">
+                {getSubPageTitle(activeSubPage)}
+              </span>
+            </div>
+          )}
+
+          {activeSubPage === 'all' && (
+            <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#8e8e93]">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>{factoryProfile?.name || 'Debonair'} ({factoryProfile?.unitName || 'Unit-02'})</span>
+              <span>•</span>
+              <span className="font-mono text-[#007aff]">{linesCount} Lines</span>
+            </div>
+          )}
+
+          {/* Right Action: Done Button (Apple iOS Style) */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-[#007aff] font-bold text-[17px] hover:opacity-80 active:opacity-60 transition-opacity cursor-pointer px-2 py-1 touch-manipulation"
+            >
+              Done
+            </button>
+          </div>
+        </header>
+
+        {/* Search Bar - Native iOS Spotlight / Android Settings Search Style */}
+        <div className="px-4 py-2.5 bg-[#f2f2f7] dark:bg-[#000000] border-b border-[#e5e5ea]/80 dark:border-[#2c2c2e]/80 shrink-0">
+          <div className="relative flex items-center">
+            <Search className="w-4 h-4 absolute left-3 text-[#8e8e93] pointer-events-none" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search settings, modules, tools..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full bg-[#e3e3e8] dark:bg-[#1c1c1e] text-[#1c1c1e] dark:text-white text-[14px] rounded-xl pl-9 pr-8 py-2 placeholder-[#8e8e93] border-0 focus:ring-2 focus:ring-[#007aff] transition-all touch-manipulation"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 p-1 text-[#8e8e93] hover:text-[#1c1c1e] dark:hover:text-white cursor-pointer active:scale-90"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Quick Category Segmented Filter Strip (Horizontal Touch Carousel) */}
+        {!searchQuery && (
+          <div className="px-4 py-2 bg-[#f2f2f7] dark:bg-[#000000] border-b border-[#e5e5ea]/60 dark:border-[#2c2c2e]/60 shrink-0 overflow-x-auto no-scrollbar">
+            <div className="inline-flex items-center gap-1.5 py-0.5">
+              {[
+                { id: 'all', label: 'All', icon: SlidersHorizontal },
+                { id: 'modules', label: 'Workspaces', count: ieNavigationModules.length, icon: LayoutGrid },
+                { id: 'utilities', label: 'Utilities', count: quickUtilities.length, icon: Zap },
+                { id: 'themes', label: 'Themes', icon: Palette },
+                { id: 'alerts', label: 'Sounds', icon: BellRing },
+                { id: 'layout', label: 'Widgets', icon: Layout },
+                { id: 'backup', label: 'Backup', icon: HardDrive },
+                { id: 'uikit', label: 'Spec', icon: Code2 }
+              ].map(tab => {
+                const Icon = tab.icon;
+                const isActive = activeSubPage === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveSubPage(tab.id as SettingsTab)}
+                    className={`px-3 py-1.5 rounded-full text-[12px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap touch-manipulation ${
+                      isActive
+                        ? 'bg-[#007aff] text-white shadow-xs font-bold'
+                        : 'bg-[#e3e3e8] dark:bg-[#1c1c1e] text-[#6e6e73] dark:text-[#a1a1a6] hover:bg-[#d8d8dd] dark:hover:bg-[#2c2c2e]'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{tab.label}</span>
+                    {typeof tab.count === 'number' && (
+                      <span className={`text-[10px] px-1 py-0.2 rounded-full font-mono ${isActive ? 'bg-white/25 text-white' : 'bg-black/5 dark:bg-white/10'}`}>
+                        {tab.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Toast Notification Banner */}
+        {backupToast && (
+          <div className="mx-4 mt-3 p-3 rounded-2xl bg-emerald-500 text-white text-xs font-semibold flex items-center justify-between shadow-md animate-fadeIn shrink-0">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{backupToast}</span>
+            </div>
+            <button
+              onClick={() => setBackupToast(null)}
+              className="text-white/80 hover:text-white cursor-pointer font-bold px-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Scrollable Settings Body - Inset Grouped Table Layout */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-5 space-y-5 pb-safe">
+          
+          {/* SEARCH RESULTS VIEW */}
+          {searchQuery.trim().length > 0 && (
+            <div className="space-y-4">
+              <div className="px-3 flex items-center justify-between text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider">
+                <span>Search Results</span>
+                <span className="font-mono text-[#007aff]">
+                  {filteredModules.length + filteredUtilities.length} Found
+                </span>
+              </div>
+
+              {filteredModules.length === 0 && filteredUtilities.length === 0 ? (
+                <div className="p-8 text-center bg-white dark:bg-[#1c1c1e] rounded-2xl border border-[#e5e5ea] dark:border-[#2c2c2e]">
+                  <p className="text-sm text-[#8e8e93]">No settings or modules match "{searchQuery}"</p>
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="mt-3 text-xs text-[#007aff] font-semibold hover:underline"
+                  >
+                    Clear Search
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Modules Matches */}
+                  {filteredModules.length > 0 && (
+                    <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs overflow-hidden divide-y divide-[#e5e5ea] dark:divide-[#2c2c2e]">
+                      <div className="px-4 py-2 bg-[#f9f9fb] dark:bg-[#252528] text-[11px] font-bold text-[#8e8e93] uppercase tracking-wider">
+                        Workspaces &amp; Modules
+                      </div>
+                      {filteredModules.map(m => {
+                        const Icon = m.icon;
+                        return (
+                          <div
+                            key={m.id}
+                            onClick={() => handleModuleLaunch(m.id)}
+                            className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-[#f2f2f7] dark:hover:bg-[#2c2c2e] active:bg-[#e5e5ea] dark:active:bg-[#343438] transition-colors cursor-pointer touch-manipulation min-h-[52px]"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <SquircleIcon bgColor={m.color} size="md">
+                                <Icon className="w-4 h-4 text-white" />
+                              </SquircleIcon>
+                              <div className="min-w-0">
+                                <div className="text-[15px] font-semibold text-[#1c1c1e] dark:text-white leading-tight truncate">
+                                  {m.title}
+                                </div>
+                                <div className="text-[12px] text-[#8e8e93] truncate">{m.subtitle}</div>
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-[#c7c7cc] shrink-0" />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Utilities Matches */}
+                  {filteredUtilities.length > 0 && (
+                    <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs overflow-hidden divide-y divide-[#e5e5ea] dark:divide-[#2c2c2e]">
+                      <div className="px-4 py-2 bg-[#f9f9fb] dark:bg-[#252528] text-[11px] font-bold text-[#8e8e93] uppercase tracking-wider">
+                        Frontline Utilities
+                      </div>
+                      {filteredUtilities.map(u => {
+                        const Icon = u.icon;
+                        return (
+                          <div
+                            key={u.id}
+                            onClick={u.onClick}
+                            className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-[#f2f2f7] dark:hover:bg-[#2c2c2e] active:bg-[#e5e5ea] dark:active:bg-[#343438] transition-colors cursor-pointer touch-manipulation min-h-[52px]"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <SquircleIcon bgColor={u.color} size="md">
+                                <Icon className="w-4 h-4 text-white" />
+                              </SquircleIcon>
+                              <div className="min-w-0">
+                                <div className="text-[15px] font-semibold text-[#1c1c1e] dark:text-white leading-tight truncate">
+                                  {u.title}
+                                </div>
+                                <div className="text-[12px] text-[#8e8e93] truncate">{u.subtitle}</div>
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-[#c7c7cc] shrink-0" />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* MAIN ROOT VIEW (when searchQuery is empty) */}
+          {!searchQuery && activeSubPage === 'all' && (
+            <div className="space-y-5">
+              
+              {/* 1. APPLE ID / USER ACCOUNT HERO CARD */}
+              <div
+                onClick={() => {
+                  onClose();
+                  if (onOpenUserModal) onOpenUserModal('profile');
+                }}
+                className="bg-white dark:bg-[#1c1c1e] rounded-2xl sm:rounded-3xl border border-[#e5e5ea] dark:border-[#2c2c2e] p-3.5 sm:p-4 shadow-xs flex items-center justify-between gap-3 cursor-pointer hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors touch-manipulation"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="relative">
+                    <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-[#176f78] via-[#007aff] to-[#5856d6] text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
+                      {profile?.name
+                        ? profile.name
+                            .split(' ')
+                            .map(n => n[0])
+                            .slice(0, 2)
+                            .join('')
+                            .toUpperCase()
+                        : 'IE'}
+                    </div>
+                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#1c1c1e]" />
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-[17px] font-bold text-[#000000] dark:text-white leading-tight truncate">
+                        {profile?.name || 'Debonair IE Admin'}
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#176f78]/15 text-[#176f78] dark:text-teal-300 font-mono shrink-0">
+                        {profile?.tierId ? profile.tierId.replace('_', ' ').toUpperCase() : (profile?.role ? profile.role.toUpperCase() : 'IE STAFF')}
+                      </span>
+                    </div>
+                    <p className="text-[13px] text-[#8e8e93] truncate mt-0.5">
+                      {profile?.jobTitle || 'Industrial Engineering Incharge'} • {profile?.email || 'realmec85pro231@gmail.com'}
+                    </p>
+                    <div className="flex items-center gap-2 text-[11px] text-[#176f78] dark:text-teal-400 mt-1 font-medium">
+                      <span>{factoryProfile?.name || 'Debonair LTD'} ({factoryProfile?.unitName || 'Unit-02'})</span>
+                      <span>•</span>
+                      <span>{linesCount} Active Lines</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 text-[#c7c7cc] shrink-0">
+                  <ChevronRight className="w-5 h-5" />
+                </div>
+              </div>
+
+              {/* 2. CONTROL CENTER QUICK TILES GRID (iOS Control Center / Android Quick Settings) */}
+              <div>
+                <div className="px-3 mb-2 flex items-center justify-between">
+                  <span className="text-[12px] font-bold text-[#6e6e73] dark:text-[#8e8e93] uppercase tracking-wider">
+                    Control Center Quick Actions
+                  </span>
+                  <span className="text-[11px] text-[#007aff] font-medium">Tactile Quick Controls</span>
+                </div>
+
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-2.5">
+                  {/* Tile 1: Acoustic Sound Alert Toggle */}
+                  <button
+                    type="button"
+                    onClick={handleToggleAudio}
+                    className={`flex flex-col items-center justify-center p-2.5 rounded-2xl border transition-all cursor-pointer touch-manipulation active:scale-95 ${
+                      auditoryAlertsEnabled
+                        ? 'bg-[#34c759]/15 border-[#34c759]/30 text-[#34c759] dark:bg-[#34c759]/20'
+                        : 'bg-white dark:bg-[#1c1c1e] border-[#e5e5ea] dark:border-[#2c2c2e] text-[#8e8e93]'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${
+                      auditoryAlertsEnabled ? 'bg-[#34c759] text-white' : 'bg-[#e3e3e8] dark:bg-[#2c2c2e] text-[#8e8e93]'
+                    }`}>
+                      {auditoryAlertsEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                    </div>
+                    <span className="text-[11px] font-bold text-center leading-tight">
+                      {auditoryAlertsEnabled ? 'Sound On' : 'Muted'}
+                    </span>
+                    <span className="text-[9px] text-[#8e8e93] leading-none mt-0.5">Floor Alerts</span>
+                  </button>
+
+                  {/* Tile 2: Night Shift Dark Theme Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => onSelectTheme(currentTheme === 'dark' ? 'light' : 'dark')}
+                    className={`flex flex-col items-center justify-center p-2.5 rounded-2xl border transition-all cursor-pointer touch-manipulation active:scale-95 ${
+                      currentTheme === 'dark'
+                        ? 'bg-amber-400/15 border-amber-400/30 text-amber-500 dark:bg-amber-400/20'
+                        : 'bg-white dark:bg-[#1c1c1e] border-[#e5e5ea] dark:border-[#2c2c2e] text-[#1c1c1e] dark:text-white'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${
+                      currentTheme === 'dark' ? 'bg-amber-400 text-amber-950' : 'bg-[#e3e3e8] dark:bg-[#2c2c2e] text-[#1c1c1e]'
+                    }`}>
+                      {currentTheme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+                    </div>
+                    <span className="text-[11px] font-bold text-center leading-tight">
+                      {currentTheme === 'dark' ? 'Night Shift' : 'Warm Cream'}
+                    </span>
+                    <span className="text-[9px] text-[#8e8e93] leading-none mt-0.5">Visual Mode</span>
+                  </button>
+
+                  {/* Tile 3: Lock Terminal */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      if (onLockTerminal) onLockTerminal();
+                    }}
+                    className="flex flex-col items-center justify-center p-2.5 rounded-2xl border bg-white dark:bg-[#1c1c1e] border-[#e5e5ea] dark:border-[#2c2c2e] text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all cursor-pointer touch-manipulation active:scale-95"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 flex items-center justify-center mb-1">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <span className="text-[11px] font-bold text-center leading-tight">Lock Screen</span>
+                    <span className="text-[9px] text-[#8e8e93] leading-none mt-0.5">PIN Security</span>
+                  </button>
+
+                  {/* Tile 4: Manual Snapshot Backup */}
+                  <button
+                    type="button"
+                    onClick={handleManualBackupClick}
+                    disabled={isTriggeringBackup}
+                    className="flex flex-col items-center justify-center p-2.5 rounded-2xl border bg-white dark:bg-[#1c1c1e] border-[#e5e5ea] dark:border-[#2c2c2e] text-[#ff9500] hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-all cursor-pointer touch-manipulation active:scale-95 disabled:opacity-60"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-600 flex items-center justify-center mb-1">
+                      {isTriggeringBackup ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <HardDrive className="w-4 h-4" />
+                      )}
+                    </div>
+                    <span className="text-[11px] font-bold text-center leading-tight">
+                      {isTriggeringBackup ? 'Backing Up' : 'Snapshot'}
+                    </span>
+                    <span className="text-[9px] text-[#8e8e93] leading-none mt-0.5">IndexedDB</span>
+                  </button>
+
+                  {/* Tile 5: Floor WhatsApp Chat */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      if (onOpenChat) onOpenChat();
+                    }}
+                    className="flex flex-col items-center justify-center p-2.5 rounded-2xl border bg-white dark:bg-[#1c1c1e] border-[#e5e5ea] dark:border-[#2c2c2e] text-[#008069] hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer touch-manipulation active:scale-95"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-[#008069] flex items-center justify-center mb-1 relative">
+                      <MessageSquare className="w-4 h-4" />
+                      {unreadNotificationsCount > 0 && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#25d366] ring-2 ring-white" />
+                      )}
+                    </div>
+                    <span className="text-[11px] font-bold text-center leading-tight">Floor Comms</span>
+                    <span className="text-[9px] text-[#8e8e93] leading-none mt-0.5">AI Advisor</span>
+                  </button>
+
+                  {/* Tile 6: Android APK / PWA Package */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      if (onOpenAndroidPackage) onOpenAndroidPackage();
+                    }}
+                    className="flex flex-col items-center justify-center p-2.5 rounded-2xl border bg-white dark:bg-[#1c1c1e] border-[#e5e5ea] dark:border-[#2c2c2e] text-[#107c41] hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer touch-manipulation active:scale-95"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/40 text-[#107c41] flex items-center justify-center mb-1">
+                      <Smartphone className="w-4 h-4" />
+                    </div>
+                    <span className="text-[11px] font-bold text-center leading-tight">Android APK</span>
+                    <span className="text-[9px] text-[#8e8e93] leading-none mt-0.5">v2.4.0 Pack</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 3. SECTION: PREFERENCES & DISPLAY */}
+              <div>
+                <div className="px-3 mb-1.5 flex items-center justify-between">
+                  <span className="text-[12px] font-bold text-[#6e6e73] dark:text-[#8e8e93] uppercase tracking-wider">
+                    Preferences &amp; Display
+                  </span>
+                </div>
+
+                <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl sm:rounded-3xl border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs overflow-hidden divide-y divide-[#e5e5ea] dark:divide-[#2c2c2e]">
+                  {/* Theme Selector Row */}
+                  <div
+                    onClick={() => setActiveSubPage('themes')}
+                    className="px-4 py-3 flex items-center justify-between hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors cursor-pointer touch-manipulation min-h-[50px]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <SquircleIcon bgColor="bg-[#af52de]">
+                        <Palette className="w-4 h-4" />
+                      </SquircleIcon>
+                      <div>
+                        <div className="text-[16px] text-[#1c1c1e] dark:text-white font-normal leading-tight">
+                          Theme &amp; Appearance
+                        </div>
+                        <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                          {currentThemeLabel}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-[#8e8e93] font-medium hidden sm:inline">
+                        {currentThemeLabel}
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-[#c7c7cc]" />
+                    </div>
+                  </div>
+
+                  {/* Sound Alerts Row */}
+                  <div
+                    onClick={() => setActiveSubPage('alerts')}
+                    className="px-4 py-3 flex items-center justify-between hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors cursor-pointer touch-manipulation min-h-[50px]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <SquircleIcon bgColor="bg-[#ff2d55]">
+                        <BellRing className="w-4 h-4" />
+                      </SquircleIcon>
+                      <div>
+                        <div className="text-[16px] text-[#1c1c1e] dark:text-white font-normal leading-tight">
+                          Acoustic Alerts &amp; Chimes
+                        </div>
+                        <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                          {auditoryAlertsEnabled ? 'High WIP & bottleneck alarms enabled' : 'Muted'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-[#8e8e93] font-medium hidden sm:inline">
+                        {auditoryAlertsEnabled ? 'Active' : 'Muted'}
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-[#c7c7cc]" />
+                    </div>
+                  </div>
+
+                  {/* Executive Dashboard Widgets Row */}
+                  <div
+                    onClick={() => setActiveSubPage('layout')}
+                    className="px-4 py-3 flex items-center justify-between hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors cursor-pointer touch-manipulation min-h-[50px]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <SquircleIcon bgColor="bg-[#5856d6]">
+                        <Layout className="w-4 h-4" />
+                      </SquircleIcon>
+                      <div>
+                        <div className="text-[16px] text-[#1c1c1e] dark:text-white font-normal leading-tight">
+                          Dashboard Widgets &amp; Sections
+                        </div>
+                        <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                          Configure KPI strips, WIP curves, &amp; absenteeism
+                        </div>
+                      </div>
+                    </div>
+
+                    <ChevronRight className="w-4 h-4 text-[#c7c7cc]" />
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. SECTION: PRODUCTION CONTROL WORKSPACES (Primary 5 + View All) */}
+              <div>
+                <div className="px-3 mb-1.5 flex items-center justify-between">
+                  <span className="text-[12px] font-bold text-[#6e6e73] dark:text-[#8e8e93] uppercase tracking-wider">
+                    IE Workspaces &amp; Workstations ({ieNavigationModules.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSubPage('modules')}
+                    className="text-[12px] text-[#007aff] font-semibold hover:underline cursor-pointer"
+                  >
+                    See All
+                  </button>
+                </div>
+
+                <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl sm:rounded-3xl border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs overflow-hidden divide-y divide-[#e5e5ea] dark:divide-[#2c2c2e]">
+                  {ieNavigationModules.slice(0, 5).map(m => {
+                    const Icon = m.icon;
+                    const isCurrent = currentTab === m.id;
+                    return (
+                      <div
+                        key={m.id}
+                        onClick={() => handleModuleLaunch(m.id)}
+                        className={`px-4 py-3 flex items-center justify-between gap-3 hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors cursor-pointer touch-manipulation min-h-[52px] ${
+                          isCurrent ? 'bg-[#007aff]/5 dark:bg-[#007aff]/10' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <SquircleIcon bgColor={m.color}>
+                            <Icon className="w-4 h-4 text-white" />
+                          </SquircleIcon>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[15px] font-semibold text-[#1c1c1e] dark:text-white leading-tight truncate">
+                                {m.title}
+                              </span>
+                              {isCurrent && (
+                                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-[#007aff] text-white">
+                                  Current
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[12px] text-[#8e8e93] truncate">{m.subtitle}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {m.badge && !isCurrent && (
+                            <span className="text-[11px] font-semibold text-[#8e8e93] font-mono">
+                              {m.badge}
+                            </span>
+                          )}
+                          <ChevronRight className="w-4 h-4 text-[#c7c7cc]" />
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* View All Workspaces Row */}
+                  <div
+                    onClick={() => setActiveSubPage('modules')}
+                    className="px-4 py-3 flex items-center justify-between hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors cursor-pointer touch-manipulation text-[#007aff]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <SquircleIcon bgColor="bg-[#007aff]">
+                        <LayoutGrid className="w-4 h-4 text-white" />
+                      </SquircleIcon>
+                      <span className="text-[15px] font-semibold">
+                        View All 11 IE Workspaces &amp; Setup
+                      </span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-[#007aff]" />
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. SECTION: DATA & LOCAL SNAPSHOT BACKUP */}
+              <div>
+                <div className="px-3 mb-1.5 flex items-center justify-between">
+                  <span className="text-[12px] font-bold text-[#6e6e73] dark:text-[#8e8e93] uppercase tracking-wider">
+                    Data Persistence &amp; Storage
+                  </span>
+                  <span className="text-[11px] font-mono text-[#007aff] font-medium">IndexedDB</span>
+                </div>
+
+                <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl sm:rounded-3xl border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs overflow-hidden divide-y divide-[#e5e5ea] dark:divide-[#2c2c2e]">
+                  {/* Master Backup Switch */}
+                  <div className="px-4 py-3 flex items-center justify-between min-h-[50px]">
+                    <div className="flex items-center gap-3">
+                      <SquircleIcon bgColor="bg-[#ff9500]">
+                        <HardDrive className="w-4 h-4" />
+                      </SquircleIcon>
+                      <div>
+                        <div className="text-[16px] text-[#1c1c1e] dark:text-white font-normal leading-tight">
+                          Automated Daily Backup
+                        </div>
+                        <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                          Local IndexedDB snapshot at {dailyBackupSettings.dailyBackupTime || '18:00'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <CupertinoSwitch
+                      checked={dailyBackupSettings.autoDailyBackupEnabled}
+                      onChange={val => handleUpdateBackup({ autoDailyBackupEnabled: val })}
+                      ariaLabel="Toggle Automated Daily Backup"
+                    />
+                  </div>
+
+                  {/* Backup Details Page Link */}
+                  <div
+                    onClick={() => setActiveSubPage('backup')}
+                    className="px-4 py-3 flex items-center justify-between hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors cursor-pointer touch-manipulation min-h-[50px]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <SquircleIcon bgColor="bg-[#34c759]">
+                        <Clock className="w-4 h-4" />
+                      </SquircleIcon>
+                      <div>
+                        <div className="text-[16px] text-[#1c1c1e] dark:text-white font-normal leading-tight">
+                          Backup Schedule &amp; Repository
+                        </div>
+                        <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                          Configure retention, run snapshot, or restore
+                        </div>
+                      </div>
+                    </div>
+
+                    <ChevronRight className="w-4 h-4 text-[#c7c7cc]" />
+                  </div>
+
+                  {/* CSV Line Data Import Link */}
+                  <div
+                    onClick={() => {
+                      onClose();
+                      if (onOpenDatabase) onOpenDatabase('csv-import');
+                      else if (onOpenDatabaseModal) onOpenDatabaseModal('csv-import');
+                    }}
+                    className="px-4 py-3 flex items-center justify-between hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors cursor-pointer touch-manipulation min-h-[50px]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <SquircleIcon bgColor="bg-[#107c41]">
+                        <Upload className="w-4 h-4" />
+                      </SquircleIcon>
+                      <div>
+                        <div className="text-[16px] text-[#1c1c1e] dark:text-white font-normal leading-tight">
+                          Import Line Data (CSV / Excel)
+                        </div>
+                        <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                          Bulk load SMVs, styles &amp; workstation targets
+                        </div>
+                      </div>
+                    </div>
+
+                    <ChevronRight className="w-4 h-4 text-[#c7c7cc]" />
+                  </div>
+                </div>
+              </div>
+
+              {/* 6. SECTION: ABOUT & DEVICE SPECS */}
+              <div>
+                <div className="px-3 mb-1.5 flex items-center justify-between">
+                  <span className="text-[12px] font-bold text-[#6e6e73] dark:text-[#8e8e93] uppercase tracking-wider">
+                    About &amp; Mobile Architecture
+                  </span>
+                </div>
+
+                <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl sm:rounded-3xl border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs overflow-hidden divide-y divide-[#e5e5ea] dark:divide-[#2c2c2e]">
+                  <div className="px-4 py-3 flex items-center justify-between min-h-[48px]">
+                    <span className="text-[15px] text-[#1c1c1e] dark:text-white">Platform System</span>
+                    <span className="text-[14px] text-[#8e8e93] font-medium">DGU-2 IE Daily Control</span>
+                  </div>
+
+                  <div className="px-4 py-3 flex items-center justify-between min-h-[48px]">
+                    <span className="text-[15px] text-[#1c1c1e] dark:text-white">Build Version</span>
+                    <span className="text-[14px] text-[#8e8e93] font-mono">v2.4.0 (PWA + TWA)</span>
+                  </div>
+
+                  <div className="px-4 py-3 flex items-center justify-between min-h-[48px]">
+                    <span className="text-[15px] text-[#1c1c1e] dark:text-white">Active Plant</span>
+                    <span className="text-[14px] text-[#8e8e93] font-medium">
+                      {factoryProfile?.name || 'Debonair'} ({factoryProfile?.unitName || 'Unit-02'})
+                    </span>
+                  </div>
+
+                  {/* View SwiftUI Spec */}
+                  <div
+                    onClick={() => setActiveSubPage('uikit')}
+                    className="px-4 py-3 flex items-center justify-between hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors cursor-pointer touch-manipulation min-h-[48px] text-[#007aff]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <SquircleIcon bgColor="bg-[#30b0c7]">
+                        <Code2 className="w-4 h-4 text-white" />
+                      </SquircleIcon>
+                      <span className="text-[15px] font-semibold">
+                        View Native SwiftUI / UIKit Code
+                      </span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-[#007aff]" />
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* SUB-PAGE 1: ALL IE NAVIGATION MODULES */}
+          {activeSubPage === 'modules' && (
+            <div className="space-y-4">
+              <div className="px-3 flex items-center justify-between">
+                <div>
+                  <h4 className="text-[13px] font-bold text-[#6e6e73] dark:text-[#8e8e93] uppercase tracking-wider">
+                    All 11 IE Workspaces &amp; Floor Workbenches
+                  </h4>
+                  <p className="text-[12px] text-[#8e8e93] mt-0.5">
+                    Tap any workstation module to switch your production floor view.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl sm:rounded-3xl border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs overflow-hidden divide-y divide-[#e5e5ea] dark:divide-[#2c2c2e]">
+                {filteredModules.map(module => {
+                  const Icon = module.icon;
+                  const isCurrent = currentTab === module.id;
+                  return (
+                    <div
+                      key={module.id}
+                      onClick={() => handleModuleLaunch(module.id)}
+                      className={`px-4 py-3.5 flex items-center justify-between gap-3 transition-colors cursor-pointer hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] touch-manipulation min-h-[58px] ${
+                        isCurrent ? 'bg-[#007aff]/5 dark:bg-[#007aff]/10' : ''
+                      }`}
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <SquircleIcon bgColor={module.color} size="md">
+                          <Icon className="w-4 h-4 text-white" />
+                        </SquircleIcon>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[15px] font-semibold text-[#1c1c1e] dark:text-white leading-tight">
+                              {module.title}
+                            </span>
+                            {isCurrent && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#007aff] text-white">
+                                Active Now
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[12px] text-[#8e8e93] mt-0.5 line-clamp-1">
+                            {module.subtitle}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {module.badge && !isCurrent && (
+                          <span className={`text-[11px] font-mono hidden sm:inline ${module.badgeColor}`}>
+                            {module.badge}
+                          </span>
+                        )}
+                        <ChevronRight className="w-4 h-4 text-[#c7c7cc]" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* SUB-PAGE 2: ALL QUICK UTILITIES */}
+          {activeSubPage === 'utilities' && (
+            <div className="space-y-4">
+              <div className="px-3 flex items-center justify-between">
+                <div>
+                  <h4 className="text-[13px] font-bold text-[#6e6e73] dark:text-[#8e8e93] uppercase tracking-wider">
+                    Frontline Quick Utilities &amp; Tools ({quickUtilities.length})
+                  </h4>
+                  <p className="text-[12px] text-[#8e8e93] mt-0.5">
+                    Fast operational triggers for shop floor engineers and line incharge.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl sm:rounded-3xl border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs overflow-hidden divide-y divide-[#e5e5ea] dark:divide-[#2c2c2e]">
+                {filteredUtilities.map(util => {
+                  const Icon = util.icon;
+                  return (
+                    <div
+                      key={util.id}
+                      onClick={util.onClick}
+                      className="px-4 py-3.5 flex items-center justify-between gap-3 transition-colors cursor-pointer hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] touch-manipulation min-h-[58px]"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <SquircleIcon bgColor={util.color} size="md">
+                          <Icon className="w-4 h-4 text-white" />
+                        </SquircleIcon>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[15px] font-semibold text-[#1c1c1e] dark:text-white leading-tight truncate">
+                              {util.title}
+                            </span>
+                            {util.badge && (
+                              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#007aff]/15 text-[#007aff] font-mono shrink-0">
+                                {util.badge}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[12px] text-[#8e8e93] truncate mt-0.5">
+                            {util.subtitle}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-semibold text-[#007aff]">
+                          {util.actionLabel}
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-[#c7c7cc]" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* SUB-PAGE 3: THEMES & APPEARANCE */}
+          {activeSubPage === 'themes' && (
+            <div className="space-y-4">
+              <div className="px-3">
+                <h4 className="text-[13px] font-bold text-[#6e6e73] dark:text-[#8e8e93] uppercase tracking-wider">
+                  Factory Visual Themes
+                </h4>
+                <p className="text-[12px] text-[#8e8e93] mt-0.5">
+                  Select high-contrast palettes designed for various shop floor and lighting environments.
+                </p>
+              </div>
+
+              <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl sm:rounded-3xl border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs overflow-hidden divide-y divide-[#e5e5ea] dark:divide-[#2c2c2e]">
+                {themes.map(t => {
+                  const isSelected = currentTheme === t.id;
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => onSelectTheme(t.id)}
+                      className="px-4 py-3.5 flex items-center justify-between hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors cursor-pointer touch-manipulation min-h-[56px]"
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <span className={`w-6 h-6 rounded-full border shadow-xs shrink-0 ${t.previewClass}`} />
+                        <div>
+                          <div className="text-[16px] text-[#1c1c1e] dark:text-white font-medium leading-tight">
+                            {t.label}
+                          </div>
+                          <div className="text-[12px] text-[#8e8e93] mt-0.5">{t.desc}</div>
+                        </div>
+                      </div>
+
+                      {isSelected && (
+                        <div className="w-6 h-6 rounded-full bg-[#007aff] text-white flex items-center justify-center shrink-0 shadow-2xs">
+                          <Check className="w-4 h-4 stroke-[3]" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* SUB-PAGE 4: ACOUSTIC ALERTS & SOUNDS */}
+          {activeSubPage === 'alerts' && (
+            <div className="space-y-4">
+              <div className="px-3">
+                <h4 className="text-[13px] font-bold text-[#6e6e73] dark:text-[#8e8e93] uppercase tracking-wider">
+                  Acoustic Floor Warnings &amp; Chimes
+                </h4>
+                <p className="text-[12px] text-[#8e8e93] mt-0.5">
+                  Instant audible alerts when high WIP buffers (&gt;3,500 pcs) or bottleneck cycle times spike.
+                </p>
+              </div>
+
+              <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl sm:rounded-3xl border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs overflow-hidden divide-y divide-[#e5e5ea] dark:divide-[#2c2c2e]">
+                {/* Master Sound Switch */}
+                <div className="px-4 py-3.5 flex items-center justify-between min-h-[56px]">
+                  <div className="flex items-center gap-3.5">
+                    <SquircleIcon bgColor="bg-[#ff2d55]">
+                      <BellRing className="w-4 h-4" />
+                    </SquircleIcon>
+                    <div>
+                      <div className="text-[16px] text-[#1c1c1e] dark:text-white font-normal leading-tight">
+                        Master Acoustic Warnings
+                      </div>
+                      <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                        {auditoryAlertsEnabled ? 'Acoustic warnings active' : 'Audio muted'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <CupertinoSwitch
+                    checked={auditoryAlertsEnabled}
+                    onChange={handleToggleAudio}
+                    ariaLabel="Toggle Master Sound Alerts"
+                  />
+                </div>
+
+                {/* Sound 1: WIP Buffer Chime */}
+                <div className="px-4 py-3 flex items-center justify-between min-h-[50px]">
+                  <div className="text-[15px] text-[#1c1c1e] dark:text-white pl-11">
+                    High WIP Buffer Warning Chime
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleTestSound('wip')}
+                    disabled={playingTestSound === 'wip'}
+                    className="px-3 py-1.5 rounded-xl bg-[#007aff]/10 text-[#007aff] hover:bg-[#007aff]/20 active:scale-95 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer touch-manipulation"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>{playingTestSound === 'wip' ? 'Playing...' : 'Test Sound'}</span>
+                  </button>
+                </div>
+
+                {/* Sound 2: Bottleneck Tone */}
+                <div className="px-4 py-3 flex items-center justify-between min-h-[50px]">
+                  <div className="text-[15px] text-[#1c1c1e] dark:text-white pl-11">
+                    Bottleneck Station Tone
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleTestSound('bottleneck')}
+                    disabled={playingTestSound === 'bottleneck'}
+                    className="px-3 py-1.5 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 active:scale-95 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer touch-manipulation"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>{playingTestSound === 'bottleneck' ? 'Playing...' : 'Test Sound'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SUB-PAGE 5: DASHBOARD WIDGETS */}
+          {activeSubPage === 'layout' && (
+            <div className="space-y-4">
+              <div className="px-3">
+                <h4 className="text-[13px] font-bold text-[#6e6e73] dark:text-[#8e8e93] uppercase tracking-wider">
+                  Executive Dashboard Widgets &amp; Sections
+                </h4>
+                <p className="text-[12px] text-[#8e8e93] mt-0.5">
+                  Toggle which modules and KPI strips appear on your primary plant dashboard.
+                </p>
+              </div>
+
+              <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl sm:rounded-3xl border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs overflow-hidden divide-y divide-[#e5e5ea] dark:divide-[#2c2c2e]">
+                {layoutToggles.map(item => {
+                  const isChecked = !!layout[item.key];
+                  return (
+                    <div
+                      key={item.key}
+                      className="px-4 py-3 flex items-center justify-between min-h-[52px]"
+                    >
+                      <div className="flex items-center gap-3.5 pr-2">
+                        <SquircleIcon bgColor="bg-[#5856d6]">
+                          <Layout className="w-4 h-4" />
+                        </SquircleIcon>
+                        <div>
+                          <div className="text-[15px] text-[#1c1c1e] dark:text-white font-normal leading-tight">
+                            {item.label}
+                          </div>
+                          <div className="text-[12px] text-[#8e8e93] mt-0.5 leading-snug">
+                            {item.desc}
+                          </div>
+                        </div>
+                      </div>
+
+                      <CupertinoSwitch
+                        checked={isChecked}
+                        onChange={() => handleToggleLayout(item.key)}
+                        ariaLabel={`Toggle ${item.label}`}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* SUB-PAGE 6: AUTOMATED BACKUP ENGINE */}
+          {activeSubPage === 'backup' && (
+            <div className="space-y-4">
+              <div className="px-3">
+                <h4 className="text-[13px] font-bold text-[#6e6e73] dark:text-[#8e8e93] uppercase tracking-wider">
+                  Automated Local Backup (IndexedDB)
+                </h4>
+                <p className="text-[12px] text-[#8e8e93] mt-0.5">
+                  Full plant state snapshots saved locally in the browser sandbox. Resilient to network outages.
+                </p>
+              </div>
+
+              <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl sm:rounded-3xl border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs overflow-hidden divide-y divide-[#e5e5ea] dark:divide-[#2c2c2e]">
+                {/* Master Daily Backup Toggle */}
+                <div className="px-4 py-3.5 flex items-center justify-between min-h-[54px]">
+                  <div className="flex items-center gap-3.5">
+                    <SquircleIcon bgColor="bg-[#ff9500]">
+                      <Clock className="w-4 h-4" />
+                    </SquircleIcon>
+                    <div>
+                      <div className="text-[16px] text-[#1c1c1e] dark:text-white font-normal leading-tight">
+                        Daily Auto-Backup
+                      </div>
+                      <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                        IndexedDB snapshot of 34 lines &amp; checklists
+                      </div>
+                    </div>
+                  </div>
+
+                  <CupertinoSwitch
+                    checked={dailyBackupSettings.autoDailyBackupEnabled}
+                    onChange={val => handleUpdateBackup({ autoDailyBackupEnabled: val })}
+                    ariaLabel="Toggle Daily Auto-Backup"
+                  />
+                </div>
+
+                {/* Scheduled Backup Time */}
+                {dailyBackupSettings.autoDailyBackupEnabled && (
+                  <div className="px-4 py-3 flex items-center justify-between min-h-[52px]">
+                    <div className="flex items-center gap-3.5">
+                      <SquircleIcon bgColor="bg-[#007aff]">
+                        <Calendar className="w-4 h-4" />
+                      </SquircleIcon>
+                      <div>
+                        <div className="text-[15px] text-[#1c1c1e] dark:text-white font-normal leading-tight">
+                          Scheduled Backup Time
+                        </div>
+                        <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                          Triggers once daily at shift end (24-Hour)
+                        </div>
+                      </div>
+                    </div>
+
+                    <input
+                      type="time"
+                      value={dailyBackupSettings.dailyBackupTime || '18:00'}
+                      onChange={e => handleUpdateBackup({ dailyBackupTime: e.target.value })}
+                      className="bg-[#e3e3e8] dark:bg-[#2c2c2e] text-[#1c1c1e] dark:text-white font-mono font-semibold text-[14px] px-3 py-1.5 rounded-xl border-0 focus:ring-2 focus:ring-[#007aff] cursor-pointer"
+                    />
+                  </div>
+                )}
+
+                {/* Catch-up on Launch */}
+                {dailyBackupSettings.autoDailyBackupEnabled && (
+                  <div className="px-4 py-3 flex items-center justify-between min-h-[52px]">
+                    <div className="flex items-center gap-3.5">
+                      <SquircleIcon bgColor="bg-[#30b0c7]">
+                        <RefreshCw className="w-4 h-4" />
+                      </SquircleIcon>
+                      <div>
+                        <div className="text-[15px] text-[#1c1c1e] dark:text-white font-normal leading-tight">
+                          Catch-Up on App Launch
+                        </div>
+                        <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                          Run if opened after the scheduled daily hour
+                        </div>
+                      </div>
+                    </div>
+
+                    <CupertinoSwitch
+                      checked={dailyBackupSettings.backupOnAppLaunch}
+                      onChange={val => handleUpdateBackup({ backupOnAppLaunch: val })}
+                      ariaLabel="Toggle Catch-Up on Launch"
+                    />
+                  </div>
+                )}
+
+                {/* Retention Picker */}
+                <div className="px-4 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-3.5">
+                    <SquircleIcon bgColor="bg-[#af52de]">
+                      <Layers className="w-4 h-4" />
+                    </SquircleIcon>
+                    <div>
+                      <div className="text-[15px] text-[#1c1c1e] dark:text-white font-normal leading-tight">
+                        Retention Policy
+                      </div>
+                      <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                        Prune historical snapshots older than
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="inline-flex p-1 rounded-xl bg-[#e3e3e8] dark:bg-[#2c2c2e] text-[12px] font-semibold self-start sm:self-auto">
+                    {[
+                      { label: '14D', val: 14 },
+                      { label: '30D', val: 30 },
+                      { label: '90D', val: 90 },
+                      { label: 'All', val: 0 }
+                    ].map(item => (
+                      <button
+                        key={item.val}
+                        type="button"
+                        onClick={() => handleUpdateBackup({ backupRetentionDays: item.val })}
+                        className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                          dailyBackupSettings.backupRetentionDays === item.val
+                            ? 'bg-white dark:bg-[#1c1c1e] text-[#000000] dark:text-white shadow-xs font-bold'
+                            : 'text-[#8e8e93]'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Action Row - Trigger Backup Now */}
+                <div
+                  onClick={handleManualBackupClick}
+                  className="px-4 py-3.5 flex items-center justify-between hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors cursor-pointer touch-manipulation min-h-[56px]"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <SquircleIcon bgColor="bg-[#34c759]">
+                      <HardDrive className="w-4 h-4" />
+                    </SquircleIcon>
+                    <div>
+                      <div className="text-[16px] text-[#007aff] font-semibold leading-tight">
+                        {isTriggeringBackup ? 'Backing Up to IndexedDB...' : 'Trigger Local Snapshot Now'}
+                      </div>
+                      <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                        {dailyBackupSettings.lastBackupDate
+                          ? `Last backed up: ${dailyBackupSettings.lastBackupDate}`
+                          : 'No backup recorded yet today'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-xs text-[#007aff] font-semibold">
+                    {isTriggeringBackup ? (
+                      <RefreshCw className="w-4 h-4 animate-spin text-[#007aff]" />
+                    ) : (
+                      <span className="px-3 py-1 rounded-xl bg-[#007aff]/10 text-[#007aff] font-bold">
+                        Run
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Browse Repository */}
+                <div
+                  onClick={() => {
+                    onClose();
+                    if (onOpenDatabase) onOpenDatabase('backup');
+                    else if (onOpenDatabaseModal) onOpenDatabaseModal('backup');
+                  }}
+                  className="px-4 py-3.5 flex items-center justify-between hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors cursor-pointer touch-manipulation min-h-[56px]"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <SquircleIcon bgColor="bg-[#8e8e93]">
+                      <Database className="w-4 h-4" />
+                    </SquircleIcon>
+                    <div>
+                      <div className="text-[16px] text-[#1c1c1e] dark:text-white font-normal leading-tight">
+                        Browse IndexedDB Snapshots &amp; Restore
+                      </div>
+                      <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                        1-click restore, download JSON, or inspect lines
+                      </div>
+                    </div>
+                  </div>
+
+                  <ChevronRight className="w-4 h-4 text-[#c7c7cc]" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SUB-PAGE 7: SWIFTUI / UIKIT SPECIFICATION */}
+          {activeSubPage === 'uikit' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#1c1c1e] border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-[#af52de]" />
+                    <span className="font-semibold text-xs text-[#000000] dark:text-white">
+                      SwiftUI &amp; Mobile Architecture Spec
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(swiftUiCodeSnippet);
+                      setCopiedCode(true);
+                      setTimeout(() => setCopiedCode(false), 2000);
+                    }}
+                    className="px-2.5 py-1 rounded-xl bg-[#007aff]/10 text-[#007aff] text-xs font-semibold flex items-center gap-1 hover:bg-[#007aff]/20 active:scale-95 transition-all cursor-pointer"
+                  >
+                    {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedCode ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+                <pre className="p-3.5 rounded-xl bg-[#1e1e1e] text-[#d4d4d4] font-mono text-[11px] leading-relaxed overflow-x-auto max-h-80">
+                  {swiftUiCodeSnippet}
+                </pre>
+              </div>
+            </div>
+          )}
+
+        </div>
+
+        {/* Bottom Bar: Quick Plant Info Footer */}
+        <footer className="px-4 sm:px-6 py-3 border-t border-[#c6c6c8]/60 dark:border-[#38383a]/60 bg-[#fbfbfd]/90 dark:bg-[#1c1c1e]/90 flex items-center justify-between gap-3 shrink-0 select-none pb-safe">
+          <div className="text-[12px] text-[#8e8e93] flex items-center gap-1.5 truncate">
+            <span>Plant:</span>
+            <strong className="text-[#1c1c1e] dark:text-white truncate">
+              {factoryProfile?.name || 'Debonair LTD'} ({factoryProfile?.unitName || 'Unit-02'})
+            </strong>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-full bg-[#007aff] hover:bg-[#0066d6] text-white text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 touch-manipulation"
+          >
+            Done
+          </button>
+        </footer>
+
+      </div>
+    </div>
+  );
+};

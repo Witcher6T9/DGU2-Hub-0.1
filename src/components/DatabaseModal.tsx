@@ -38,7 +38,9 @@ import {
   ShieldCheck,
   Settings as SettingsIcon,
   Archive,
-  ArrowDownToLine
+  ArrowDownToLine,
+  WifiOff,
+  Activity
 } from 'lucide-react';
 import { LineEntry, ChecklistMap, TodoItem, LeanActionItem, UserDailyBackupSettings, DailyBackupRecord } from '../types';
 import {
@@ -62,6 +64,7 @@ import {
   exportExcelTemplate,
   downloadCSVTemplate
 } from '../utils/csvLineImporter';
+import { OfflineActivityLogView } from './OfflineActivityLogView';
 
 interface DatabaseModalProps {
   isOpen: boolean;
@@ -76,7 +79,7 @@ interface DatabaseModalProps {
   onLoadDebonairData?: () => void;
   onImportLines?: (importedLines: LineEntry[], mode?: 'upsert' | 'append' | 'replace') => void;
   activeDate?: string;
-  initialTab?: 'backup' | 'csv-import';
+  initialTab?: 'backup' | 'csv-import' | 'offline-log';
   dailyBackupSettings?: UserDailyBackupSettings;
   onUpdateDailyBackupSettings?: (updated: UserDailyBackupSettings) => void;
   onOpenSettingsBackup?: () => void;
@@ -102,7 +105,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   onOpenSettingsBackup,
   onTriggerManualBackup
 }) => {
-  const [activeTab, setActiveTab] = useState<'backup' | 'csv-import'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'backup' | 'csv-import' | 'offline-log'>(initialTab);
   const jsonFileInputRef = useRef<HTMLInputElement>(null);
   const csvFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -489,7 +492,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
       <div
         className={`bg-[#fbfaf6] border border-[#d9d2c2] rounded-3xl w-full shadow-2xl transition-all duration-200 flex flex-col my-auto ${
-          activeTab === 'csv-import' ? 'max-w-5xl max-h-[92vh]' : 'max-w-xl'
+          activeTab === 'csv-import' || activeTab === 'offline-log' ? 'max-w-5xl max-h-[92vh]' : 'max-w-xl'
         }`}
       >
         {/* Modal Top Header */}
@@ -498,6 +501,8 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
             <div className="w-9 h-9 rounded-xl bg-[#176f78] text-white flex items-center justify-center shadow-xs">
               {activeTab === 'csv-import' ? (
                 <FileSpreadsheet className="w-5 h-5" />
+              ) : activeTab === 'offline-log' ? (
+                <WifiOff className="w-5 h-5 text-amber-300" />
               ) : (
                 <Database className="w-5 h-5" />
               )}
@@ -505,11 +510,15 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-display text-lg sm:text-xl font-bold uppercase tracking-tight text-[#17343a]">
-                  Factory Database &amp; Line Setup
+                  {activeTab === 'offline-log'
+                    ? 'Offline Activity Log & Sync'
+                    : 'Factory Database & Line Setup'}
                 </h3>
               </div>
               <p className="text-xs text-[#527078]">
-                System backups, factory defaults, and rapid CSV / Excel line commissioning
+                {activeTab === 'offline-log'
+                  ? 'Audit trail of manual changes made while connection was offline — review & force sync'
+                  : 'System backups, factory defaults, and rapid CSV / Excel line commissioning'}
               </p>
             </div>
           </div>
@@ -525,12 +534,12 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex border-b border-[#e7e1d5] bg-[#f1eee6]/60 px-5 shrink-0">
+        <div className="flex border-b border-[#e7e1d5] bg-[#f1eee6]/60 px-5 shrink-0 overflow-x-auto">
           <button
             id="db-tab-backup"
             type="button"
             onClick={() => setActiveTab('backup')}
-            className={`flex items-center gap-2 py-3 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 py-3 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'backup'
                 ? 'border-[#176f78] text-[#176f78] bg-white/60'
                 : 'border-transparent text-[#527078] hover:text-[#17343a]'
@@ -547,7 +556,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
             id="db-tab-csv-import"
             type="button"
             onClick={() => setActiveTab('csv-import')}
-            className={`flex items-center gap-2 py-3 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer relative ${
+            className={`flex items-center gap-2 py-3 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer relative whitespace-nowrap ${
               activeTab === 'csv-import'
                 ? 'border-[#176f78] text-[#176f78] bg-white/60'
                 : 'border-transparent text-[#527078] hover:text-[#17343a]'
@@ -557,6 +566,24 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
             <span>Import Lines (CSV / Excel)</span>
             <span className="ml-1 text-[9px] uppercase px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold">
               Line Setup
+            </span>
+          </button>
+
+          <button
+            id="db-tab-offline-log"
+            type="button"
+            onClick={() => setActiveTab('offline-log')}
+            className={`flex items-center gap-2 py-3 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer relative whitespace-nowrap ${
+              activeTab === 'offline-log'
+                ? 'border-[#176f78] text-[#176f78] bg-white/60'
+                : 'border-transparent text-[#527078] hover:text-[#17343a]'
+            }`}
+          >
+            <WifiOff className="w-4 h-4 text-amber-600" />
+            <span>Offline Activity Log</span>
+            <span className="ml-1 text-[9px] uppercase px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              Offline
             </span>
           </button>
         </div>
@@ -1603,6 +1630,11 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
           </div>
         )}
 
+        {/* TAB 3: Offline Activity Log */}
+        {activeTab === 'offline-log' && (
+          <OfflineActivityLogView />
+        )}
+
         {/* Modal Bottom Action Footer */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-5 pt-3 border-t border-[#e7e1d5] bg-[#fbfaf6] shrink-0">
           {activeTab === 'csv-import' ? (
@@ -1652,6 +1684,20 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                 </button>
               </div>
             </>
+          ) : activeTab === 'offline-log' ? (
+            <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-[#527078]">
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                Connection Status: <strong className="text-amber-700">Offline (Connection Off)</strong> — Edits saved to local audit trail
+              </span>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#f1eee6] hover:bg-[#e7e1d5] text-[#527078] text-xs font-bold transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           ) : (
             <div className="w-full flex justify-end">
               <button

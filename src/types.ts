@@ -654,7 +654,7 @@ export interface ChatUserMember {
 }
 
 export interface SyncState {
-  status: 'live' | 'syncing' | 'idle' | 'error' | 'connected';
+  status: 'live' | 'syncing' | 'idle' | 'error' | 'connected' | 'offline';
   latencyMs: number;
   lastSyncTime: string;
   cloudEndpoint?: string;

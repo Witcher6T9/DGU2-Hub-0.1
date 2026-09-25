@@ -71,6 +71,7 @@ import {
   calculateStyleWipThreshold
 } from './utils';
 import { playAuditoryAlert } from './utils/audioAlert';
+import { isSystemOffline, logOfflineActivity } from './utils/offlineSyncManager';
 
 // Code-split secondary tabs for fast initial boot
 const DailyChecklist = lazy(() => import('./components/DailyChecklist').then(m => ({ default: m.DailyChecklist })));
@@ -285,10 +286,10 @@ export default function App() {
     } catch {}
   }, [auditoryAlertsEnabled]);
 
-  // Sync state
+  // Sync state (Initialized to Offline - Connection Off)
   const [syncState, setSyncState] = useState<SyncState>({
-    status: 'connected',
-    latencyMs: 24,
+    status: isSystemOffline() ? 'offline' : 'connected',
+    latencyMs: isSystemOffline() ? 0 : 24,
     lastSyncTime: new Date().toISOString()
   });
 
@@ -299,7 +300,7 @@ export default function App() {
   const [userModalTab, setUserModalTab] = useState<'profile' | 'roles'>('profile');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isDatabaseOpen, setIsDatabaseOpen] = useState(false);
-  const [databaseInitialTab, setDatabaseInitialTab] = useState<'backup' | 'csv-import'>('backup');
+  const [databaseInitialTab, setDatabaseInitialTab] = useState<'backup' | 'csv-import' | 'offline-log'>('backup');
   const [isScorecardOpen, setIsScorecardOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isPrivacySecurityOpen, setIsPrivacySecurityOpen] = useState(false);
@@ -777,16 +778,33 @@ export default function App() {
     } catch {}
   }, [layout]);
 
-  // Periodic simulated telemetry ping
+  // Periodic simulated telemetry ping - strictly respects offline status
   useEffect(() => {
-    const interval = setInterval(() => {
+    const updateStatus = () => {
+      const offline = isSystemOffline();
       setSyncState({
-        status: 'connected',
-        latencyMs: Math.floor(18 + Math.random() * 16),
+        status: offline ? 'offline' : 'connected',
+        latencyMs: offline ? 0 : Math.floor(18 + Math.random() * 16),
         lastSyncTime: new Date().toISOString()
       });
-    }, 12000);
-    return () => clearInterval(interval);
+    };
+
+    updateStatus();
+    const interval = setInterval(updateStatus, 12000);
+    const handleStatusEvt = (e: any) => {
+      const offline = typeof e.detail?.isOffline === 'boolean' ? e.detail.isOffline : isSystemOffline();
+      setSyncState({
+        status: offline ? 'offline' : 'connected',
+        latencyMs: offline ? 0 : 24,
+        lastSyncTime: new Date().toISOString()
+      });
+    };
+
+    window.addEventListener('ie_offline_status_change', handleStatusEvt);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('ie_offline_status_change', handleStatusEvt);
+    };
   }, []);
 
   // WIP Level & Bottleneck Monitoring Notification & Auditory Alert Trigger
@@ -934,9 +952,30 @@ export default function App() {
   // Handlers
   const handleUpdateChecklistTask = (date: string, idx: number, status: ChecklistStatus) => {
     const current = normalizeChecklistStatuses(checklists[date]);
+    const previousStatus = current[idx] || 'pending';
     const updated = [...current];
     updated[idx] = status;
     setChecklists(prev => ({ ...prev, [date]: updated }));
+
+    if (isSystemOffline()) {
+      logOfflineActivity({
+        category: 'checklist',
+        action: 'update',
+        entityId: `Task #${idx + 1}`,
+        entityTitle: `IE Checklist Task #${idx + 1} (${date})`,
+        dataPoints: [
+          {
+            field: 'status',
+            label: 'Audit Status',
+            previousValue: previousStatus.toUpperCase(),
+            newValue: status.toUpperCase()
+          }
+        ],
+        summary: `Verification status updated from ${previousStatus.toUpperCase()} to ${status.toUpperCase()}`,
+        operatorName: profile.name || 'Debonair IE Admin',
+        operatorRole: profile.role || 'SENIOR INDUSTRIAL ENGINEER'
+      });
+    }
   };
 
   const handleBatchUpdateChecklist = (date: string, statuses: ChecklistStatus[]) => {
@@ -944,6 +983,48 @@ export default function App() {
   };
 
   const handleSaveLine = (updatedLine: LineEntry) => {
+    if (isSystemOffline()) {
+      const existing = lines.find(l => l.id === updatedLine.id);
+      const diffs: Array<{ field: string; label: string; previousValue?: any; newValue: any }> = [];
+      if (existing) {
+        if (existing.targetProd !== updatedLine.targetProd) {
+          diffs.push({ field: 'targetProd', label: 'Target Output', previousValue: `${existing.targetProd} pcs`, newValue: `${updatedLine.targetProd} pcs` });
+        }
+        if (existing.achievedProd !== updatedLine.achievedProd) {
+          diffs.push({ field: 'achievedProd', label: 'Achieved Output', previousValue: `${existing.achievedProd} pcs`, newValue: `${updatedLine.achievedProd} pcs` });
+        }
+        if (existing.targetEff !== updatedLine.targetEff) {
+          diffs.push({ field: 'targetEff', label: 'Target Eff%', previousValue: `${existing.targetEff}%`, newValue: `${updatedLine.targetEff}%` });
+        }
+        if (existing.efficiency !== updatedLine.efficiency) {
+          diffs.push({ field: 'efficiency', label: 'Floor Eff%', previousValue: `${existing.efficiency}%`, newValue: `${updatedLine.efficiency}%` });
+        }
+        if (existing.plannedMP !== updatedLine.plannedMP) {
+          diffs.push({ field: 'plannedMP', label: 'Planned Manpower', previousValue: `${existing.plannedMP} operators`, newValue: `${updatedLine.plannedMP} operators` });
+        }
+        if (existing.wip !== updatedLine.wip) {
+          diffs.push({ field: 'wip', label: 'WIP Buffer', previousValue: `${existing.wip} pcs`, newValue: `${updatedLine.wip} pcs` });
+        }
+        if (existing.remarks !== updatedLine.remarks) {
+          diffs.push({ field: 'remarks', label: 'IE Remarks', previousValue: existing.remarks || 'None', newValue: updatedLine.remarks || 'None' });
+        }
+        if (existing.style !== updatedLine.style) {
+          diffs.push({ field: 'style', label: 'Style / Buyer', previousValue: existing.style, newValue: updatedLine.style });
+        }
+      }
+      if (diffs.length > 0) {
+        logOfflineActivity({
+          category: 'line',
+          action: 'update',
+          entityId: `Line ${updatedLine.lineNo}`,
+          entityTitle: `Sewing Line ${updatedLine.lineNo} (${updatedLine.floor || 'Floor 03'})`,
+          dataPoints: diffs,
+          summary: `Updated ${diffs.map(d => `${d.label} (${d.newValue})`).join(', ')} while connection was offline`,
+          operatorName: profile.name || 'Debonair IE Admin',
+          operatorRole: profile.role || 'SENIOR INDUSTRIAL ENGINEER'
+        });
+      }
+    }
     setLines(prev => prev.map(l => (l.id === updatedLine.id ? updatedLine : l)));
   };
 
@@ -1864,8 +1945,13 @@ export default function App() {
         )}
       </Suspense>
 
-      {/* Real-Time Connectivity Offline Indicator */}
-      <OfflineIndicator />
+      {/* Real-Time Connectivity Offline Indicator with Direct Access to Activity Log */}
+      <OfflineIndicator
+        onOpenOfflineLog={() => {
+          setDatabaseInitialTab('offline-log');
+          setIsDatabaseOpen(true);
+        }}
+      />
     </div>
   );
 }

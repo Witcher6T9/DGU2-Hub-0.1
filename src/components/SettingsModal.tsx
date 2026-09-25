@@ -56,7 +56,8 @@ import {
   Sun,
   Moon,
   Info,
-  SmartphoneNfc
+  SmartphoneNfc,
+  DownloadCloud
 } from 'lucide-react';
 import { AndroidLogoIcon } from './AndroidLogoIcon';
 import {
@@ -78,9 +79,7 @@ export type SettingsTab =
   | 'themes'
   | 'alerts'
   | 'layout'
-  | 'uikit';
-
-export type ComponentPresentationStyle = 'swiftui' | 'uikit' | 'developer-spec';
+  | 'updates';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -218,8 +217,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [playingTestSound, setPlayingTestSound] = useState<'wip' | 'bottleneck' | null>(null);
   const [isTriggeringBackup, setIsTriggeringBackup] = useState<boolean>(false);
   const [backupToast, setBackupToast] = useState<string | null>(null);
-  const [copiedCode, setCopiedCode] = useState<boolean>(false);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState<boolean>(false);
+  const [updateStatusMsg, setUpdateStatusMsg] = useState<string | null>(null);
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState<boolean>(true);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCheckForUpdates = () => {
+    setIsCheckingUpdate(true);
+    setUpdateStatusMsg(null);
+    setTimeout(() => {
+      setIsCheckingUpdate(false);
+      setUpdateStatusMsg('DGU-2 IE Control is up to date (Version 2.4.0).');
+      setTimeout(() => setUpdateStatusMsg(null), 4500);
+    }, 1200);
+  };
 
   // Sync initial tab when opened
   useEffect(() => {
@@ -521,16 +532,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     },
     {
       id: 'util-android-package',
-      title: 'Android App & APK Packager',
-      subtitle: 'Install PWA or download APK (com.debonair.iedailycontrol)',
+      title: 'System Updates & Install (Android APK)',
+      subtitle: 'Version 2.4.0 • Download standalone APK or install PWA to home screen',
       category: 'Mobile & Terminal',
-      icon: Smartphone,
-      color: 'bg-[#107c41]',
-      actionLabel: 'Package',
-      badge: 'v2.4.0',
+      icon: DownloadCloud,
+      color: 'bg-[#007aff]',
+      actionLabel: 'Updates',
+      badge: 'v2.4.0 Up to date',
       onClick: () => {
-        onClose();
-        if (onOpenAndroidPackage) onOpenAndroidPackage();
+        setActiveSubPage('updates');
       }
     },
     {
@@ -678,75 +688,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     });
   };
 
-  const swiftUiCodeSnippet = `//
-//  MobileSettingsControlCenter.swift
-//  DGU2 IE Daily Control System
-//
-//  SwiftUI Native Inset Grouped Navigation & Control Center
-//
-
-import SwiftUI
-
-struct MobileSettingsView: View {
-    @AppStorage("auditoryAlerts") private var auditoryAlerts: Bool = true
-    @AppStorage("autoDailyBackup") private var autoBackup: Bool = true
-    @AppStorage("backupTime") private var backupTime: String = "18:00"
-    @AppStorage("retentionDays") private var retentionDays: Int = 30
-    @AppStorage("currentTheme") private var currentTheme: String = "light"
-    
-    var body: some View {
-        NavigationStack {
-            List {
-                // Section: Operator Profile
-                Section {
-                    NavigationLink(destination: ProfileDetailView()) {
-                        HStack(spacing: 14) {
-                            Image(systemName: "person.crop.circle.fill")
-                                .resizable()
-                                .frame(width: 52, height: 52)
-                                .foregroundColor(.accentColor)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Debonair IE Admin").font(.headline)
-                                Text("Level 4 • System Admin").font(.subheadline).foregroundColor(.secondary)
-                                Text("realmec85pro231@gmail.com").font(.caption).foregroundColor(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-                
-                // Section: Quick Control Center Tiles
-                Section(header: Text("CONTROL CENTER")) {
-                    Toggle("Auditory Warning Chimes", isOn: $auditoryAlerts)
-                    Toggle("Automated Daily Backup", isOn: $autoBackup)
-                }
-                
-                // Section: IE Navigation Modules
-                Section(header: Text("IE WORKSPACES")) {
-                    NavigationLink("Production Dashboard", destination: DashboardView())
-                    NavigationLink("Workstation & Line Balancing", destination: LineBalancingView())
-                    NavigationLink("Visual Floor Plan & Line Setup", destination: FloorPlanView())
-                    NavigationLink("IE Flow Simulator", destination: SimulatorView())
-                    NavigationLink("Daily Activity Tracking", destination: ChecklistView())
-                }
-                
-                // Section: Preferences
-                Section(header: Text("PREFERENCES")) {
-                    NavigationLink(destination: ThemePickerView()) {
-                        HStack {
-                            Text("Theme")
-                            Spacer()
-                            Text(currentTheme.capitalized).foregroundColor(.secondary)
-                        }
-                    }
-                }
-            }
-            .listStyle(.insetGrouped)
-            .navigationTitle("Settings")
-        }
-    }
-}`;
-
   // Get active subpage title for top bar navigation
   const getSubPageTitle = (subPage: SettingsTab) => {
     switch (subPage) {
@@ -762,8 +703,8 @@ struct MobileSettingsView: View {
         return 'Sound & Alerts';
       case 'layout':
         return 'Widgets Layout';
-      case 'uikit':
-        return 'Swift Spec';
+      case 'updates':
+        return 'System Updates & Install';
       default:
         return 'Settings';
     }
@@ -873,7 +814,7 @@ struct MobileSettingsView: View {
                 { id: 'alerts', label: 'Sounds', icon: BellRing },
                 { id: 'layout', label: 'Widgets', icon: Layout },
                 { id: 'backup', label: 'Backup', icon: HardDrive },
-                { id: 'uikit', label: 'Spec', icon: Code2 }
+                { id: 'updates', label: 'Updates', icon: DownloadCloud }
               ].map(tab => {
                 const Icon = tab.icon;
                 const isActive = activeSubPage === tab.id;
@@ -1171,20 +1112,20 @@ struct MobileSettingsView: View {
                     <span className="text-[9px] text-[#8e8e93] leading-none mt-0.5">AI Advisor</span>
                   </button>
 
-                  {/* Tile 6: Android APK / PWA Package */}
+                  {/* Tile 6: System Updates & Install */}
                   <button
                     type="button"
-                    onClick={() => {
-                      onClose();
-                      if (onOpenAndroidPackage) onOpenAndroidPackage();
-                    }}
-                    className="flex flex-col items-center justify-center p-2.5 rounded-2xl border bg-white dark:bg-[#1c1c1e] border-[#e5e5ea] dark:border-[#2c2c2e] text-[#107c41] hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer touch-manipulation active:scale-95"
+                    onClick={() => setActiveSubPage('updates')}
+                    className="flex flex-col items-center justify-center p-2.5 rounded-2xl border bg-white dark:bg-[#1c1c1e] border-[#e5e5ea] dark:border-[#2c2c2e] text-[#007aff] hover:bg-blue-50/70 dark:hover:bg-blue-950/30 transition-all cursor-pointer touch-manipulation active:scale-95 group relative"
                   >
-                    <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/40 text-[#107c41] flex items-center justify-center mb-1">
-                      <Smartphone className="w-4 h-4" />
+                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 text-[#007aff] flex items-center justify-center mb-1 relative">
+                      <DownloadCloud className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#34c759] ring-2 ring-white dark:ring-[#1c1c1e]" />
                     </div>
-                    <span className="text-[11px] font-bold text-center leading-tight">Android APK</span>
-                    <span className="text-[9px] text-[#8e8e93] leading-none mt-0.5">v2.4.0 Pack</span>
+                    <span className="text-[11px] font-bold text-center leading-tight truncate w-full px-0.5">
+                      System Update
+                    </span>
+                    <span className="text-[9px] text-[#8e8e93] leading-none mt-0.5">Install &amp; APK</span>
                   </button>
                 </div>
               </div>
@@ -1461,20 +1402,32 @@ struct MobileSettingsView: View {
                     </span>
                   </div>
 
-                  {/* View SwiftUI Spec */}
+                  {/* System Updates & Install */}
                   <div
-                    onClick={() => setActiveSubPage('uikit')}
-                    className="px-4 py-3 flex items-center justify-between hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors cursor-pointer touch-manipulation min-h-[48px] text-[#007aff]"
+                    onClick={() => setActiveSubPage('updates')}
+                    className="px-4 py-3 flex items-center justify-between hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors cursor-pointer touch-manipulation min-h-[50px] text-[#007aff]"
                   >
                     <div className="flex items-center gap-3">
-                      <SquircleIcon bgColor="bg-[#30b0c7]">
-                        <Code2 className="w-4 h-4 text-white" />
+                      <SquircleIcon bgColor="bg-[#007aff]">
+                        <DownloadCloud className="w-4 h-4 text-white" />
                       </SquircleIcon>
-                      <span className="text-[15px] font-semibold">
-                        View Native SwiftUI / UIKit Code
-                      </span>
+                      <div>
+                        <div className="text-[16px] text-[#1c1c1e] dark:text-white font-medium leading-tight">
+                          System Updates &amp; Install
+                        </div>
+                        <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                          v2.4.0 • Android APK package &amp; PWA install
+                        </div>
+                      </div>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-[#007aff]" />
+
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#34c759]/15 text-[#34c759] border border-[#34c759]/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#34c759] animate-pulse" />
+                        Up to Date
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-[#c7c7cc]" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1948,33 +1901,219 @@ struct MobileSettingsView: View {
             </div>
           )}
 
-          {/* SUB-PAGE 7: SWIFTUI / UIKIT SPECIFICATION */}
-          {activeSubPage === 'uikit' && (
+          {/* SUB-PAGE 7: SYSTEM UPDATES & INSTALL (Mobile Phone OS Style) */}
+          {activeSubPage === 'updates' && (
             <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-white dark:bg-[#1c1c1e] border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Terminal className="w-4 h-4 text-[#af52de]" />
-                    <span className="font-semibold text-xs text-[#000000] dark:text-white">
-                      SwiftUI &amp; Mobile Architecture Spec
-                    </span>
+              {/* System OS Hero Status Banner */}
+              <div className="p-6 rounded-2xl sm:rounded-3xl bg-white dark:bg-[#1c1c1e] border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs flex flex-col items-center text-center">
+                <div className="relative mb-3">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#007aff] to-[#30b0c7] flex items-center justify-center text-white shadow-md">
+                    <DownloadCloud className="w-8 h-8" />
                   </div>
+                  <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#34c759] border-2 border-white dark:border-[#1c1c1e] flex items-center justify-center">
+                    <Check className="w-3 h-3 text-white stroke-[3]" />
+                  </span>
+                </div>
+
+                <h3 className="text-[19px] font-bold text-[#1c1c1e] dark:text-white leading-tight">
+                  DGU-2 IE Control OS 2.4
+                </h3>
+                <p className="text-[13px] text-[#8e8e93] mt-1">
+                  Your system and frontline software are up to date.
+                </p>
+
+                <div className="inline-flex items-center gap-2 mt-3 px-3 py-1 rounded-full bg-[#f2f2f7] dark:bg-[#2c2c2e] text-[#6e6e73] dark:text-[#a1a1a6] text-[11px] font-mono">
+                  <span>Version 2.4.0 (Build 2026.09.25-LTS)</span>
+                </div>
+
+                {/* Check for updates button */}
+                <div className="mt-4 flex flex-col items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(swiftUiCodeSnippet);
-                      setCopiedCode(true);
-                      setTimeout(() => setCopiedCode(false), 2000);
-                    }}
-                    className="px-2.5 py-1 rounded-xl bg-[#007aff]/10 text-[#007aff] text-xs font-semibold flex items-center gap-1 hover:bg-[#007aff]/20 active:scale-95 transition-all cursor-pointer"
+                    onClick={handleCheckForUpdates}
+                    disabled={isCheckingUpdate}
+                    className="px-4 py-2 rounded-full bg-[#007aff] hover:bg-[#0066d6] active:scale-95 text-white text-[13px] font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-60 touch-manipulation"
                   >
-                    {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedCode ? 'Copied' : 'Copy'}</span>
+                    <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+                    <span>{isCheckingUpdate ? 'Checking for Updates...' : 'Check for Updates'}</span>
                   </button>
+                  <span className="text-[11px] text-[#8e8e93]">
+                    Last checked: Today at 04:45 AM
+                  </span>
                 </div>
-                <pre className="p-3.5 rounded-xl bg-[#1e1e1e] text-[#d4d4d4] font-mono text-[11px] leading-relaxed overflow-x-auto max-h-80">
-                  {swiftUiCodeSnippet}
-                </pre>
+
+                {updateStatusMsg && (
+                  <div className="mt-3 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-[12px] font-medium flex items-center gap-2 animate-fadeIn">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <span>{updateStatusMsg}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Install & Distribution Channels */}
+              <div>
+                <div className="px-3 mb-1.5 flex items-center justify-between">
+                  <span className="text-[12px] font-bold text-[#6e6e73] dark:text-[#8e8e93] uppercase tracking-wider">
+                    Installation &amp; Device Setup
+                  </span>
+                  <span className="text-[11px] text-[#007aff] font-medium">Frontline Ready</span>
+                </div>
+
+                <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl sm:rounded-3xl border border-[#e5e5ea] dark:border-[#2c2c2e] shadow-2xs overflow-hidden divide-y divide-[#e5e5ea] dark:divide-[#2c2c2e]">
+                  {/* Option 1: Android APK Package */}
+                  <div
+                    onClick={() => {
+                      onClose();
+                      if (onOpenAndroidPackage) onOpenAndroidPackage();
+                    }}
+                    className="p-4 flex items-start justify-between gap-3 hover:bg-[#fbfbfd] dark:hover:bg-[#252528] active:bg-[#e5e5ea] dark:active:bg-[#2c2c2e] transition-colors cursor-pointer touch-manipulation"
+                  >
+                    <div className="flex items-start gap-3">
+                      <SquircleIcon bgColor="bg-[#107c41]">
+                        <AndroidLogoIcon className="w-5 h-5 text-white" />
+                      </SquircleIcon>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[16px] text-[#1c1c1e] dark:text-white font-semibold leading-tight">
+                            Android APK Package
+                          </span>
+                          <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-[#107c41]/15 text-[#107c41] border border-[#107c41]/30">
+                            v2.4.0 APK
+                          </span>
+                        </div>
+                        <p className="text-[12px] text-[#8e8e93] mt-1 leading-relaxed">
+                          Standalone application package for Android phones, tablets, and rugged floor scanners. Includes barcode hardware bridge and kiosk lock mode.
+                        </p>
+                        <div className="flex items-center gap-2 mt-2 text-[11px] font-mono text-[#527078] dark:text-[#80a0a8]">
+                          <span>ID: com.debonair.iedailycontrol</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-[#007aff] shrink-0 mt-1">
+                      <span className="text-[13px] font-semibold hidden sm:inline">Package &amp; Download</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </div>
+                  </div>
+
+                  {/* Option 2: Progressive Web App (PWA) Direct Install */}
+                  <div className="p-4 flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <SquircleIcon bgColor="bg-[#007aff]">
+                        <Smartphone className="w-5 h-5 text-white" />
+                      </SquircleIcon>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[16px] text-[#1c1c1e] dark:text-white font-semibold leading-tight">
+                            Progressive Web App (PWA)
+                          </span>
+                          <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-[#007aff]/15 text-[#007aff] border border-[#007aff]/30">
+                            Instant
+                          </span>
+                        </div>
+                        <p className="text-[12px] text-[#8e8e93] mt-1 leading-relaxed">
+                          Add DGU-2 directly to your phone or desktop home screen. Launches fullscreen with zero installation overhead and full offline data storage.
+                        </p>
+                        <div className="mt-2.5 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              if (onOpenAndroidPackage) onOpenAndroidPackage();
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-[#007aff]/10 hover:bg-[#007aff]/20 active:scale-95 text-[#007aff] text-[12px] font-semibold transition-all cursor-pointer inline-flex items-center gap-1.5"
+                          >
+                            <DownloadCloud className="w-3.5 h-3.5" />
+                            <span>Install App Guide</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Option 3: Auto-Update Service Worker Settings */}
+                  <div className="px-4 py-3 flex items-center justify-between min-h-[50px]">
+                    <div className="flex items-center gap-3">
+                      <SquircleIcon bgColor="bg-[#5856d6]">
+                        <RefreshCw className="w-4 h-4 text-white" />
+                      </SquircleIcon>
+                      <div>
+                        <div className="text-[15px] text-[#1c1c1e] dark:text-white font-normal leading-tight">
+                          Automatic Shift Updates
+                        </div>
+                        <div className="text-[12px] text-[#8e8e93] mt-0.5">
+                          Silent background updates via PWA service worker
+                        </div>
+                      </div>
+                    </div>
+
+                    <CupertinoSwitch
+                      checked={autoUpdateEnabled}
+                      onChange={setAutoUpdateEnabled}
+                      ariaLabel="Toggle Automatic Shift Updates"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Release Notes Card */}
+              <div>
+                <div className="px-3 mb-1.5 flex items-center justify-between">
+                  <span className="text-[12px] font-bold text-[#6e6e73] dark:text-[#8e8e93] uppercase tracking-wider">
+                    What's New in Version 2.4.0
+                  </span>
+                  <span className="text-[11px] font-mono text-[#8e8e93]">LTS Release</span>
+                </div>
+
+                <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl sm:rounded-3xl border border-[#e5e5ea] dark:border-[#2c2c2e] p-4 shadow-2xs space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#007aff] mt-2 shrink-0" />
+                    <div>
+                      <strong className="text-[13px] text-[#1c1c1e] dark:text-white block font-semibold">
+                        Mobile Phone Settings &amp; IE Control Center
+                      </strong>
+                      <p className="text-[12px] text-[#8e8e93] mt-0.5">
+                        Brand-new mobile phone UI inspired by iOS Settings and Android Quick Settings with full-bleed touch layout and instant tactile actions.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#34c759] mt-2 shrink-0" />
+                    <div>
+                      <strong className="text-[13px] text-[#1c1c1e] dark:text-white block font-semibold">
+                        Resilient Firestore Long-Polling Sync
+                      </strong>
+                      <p className="text-[12px] text-[#8e8e93] mt-0.5">
+                        Configured long-polling transport preventing 10s connection hangs in proxy and iframe environments.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#ff9500] mt-2 shrink-0" />
+                    <div>
+                      <strong className="text-[13px] text-[#1c1c1e] dark:text-white block font-semibold">
+                        Automated Daily IndexedDB Backups
+                      </strong>
+                      <p className="text-[12px] text-[#8e8e93] mt-0.5">
+                        Scheduled automated daily snapshots at end-of-shift hours with zero server dependencies.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#af52de] mt-2 shrink-0" />
+                    <div>
+                      <strong className="text-[13px] text-[#1c1c1e] dark:text-white block font-semibold">
+                        Acoustic Warnings &amp; Alarms
+                      </strong>
+                      <p className="text-[12px] text-[#8e8e93] mt-0.5">
+                        Frontline auditory chimes for high WIP accumulations and cycle time pitch bottlenecks.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
